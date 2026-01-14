@@ -44,6 +44,9 @@ The legacy model required specific JNI methods for:
 
 ## Restoration Guide
 To restore this implementation:
-1.  Ensure `denoiser_model.onnx` is present in `app/src/main/assets/`.
-2.  Revert `AudioPipeline.kt` to default to `ProcessorModel.LEGACY` or re-implement the switching logic if removed.
-3.  Ensure `PoiseProcessor.kt` and its corresponding JNI methods in `jni_bridge.cpp` are present.
+1.  **Re-include the model in the build**:
+    - Open `app/build.gradle.kts`.
+    - Remove or comment out the `assets.exclude("**/denoiser_model.onnx")` block in `sourceSets`.
+2.  Ensure `denoiser_model.onnx` is present in `app/src/main/assets/`.
+3.  Revert `AudioPipeline.kt` to default to `ProcessorModel.LEGACY` or re-implement the switching logic if removed.
+4.  Ensure `PoiseProcessor.kt` and its corresponding JNI methods in `jni_bridge.cpp` are present.
