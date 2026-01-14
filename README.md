@@ -2,6 +2,10 @@
 
 A high-performance voice isolation and audio routing tool for Android.
 
+
+https://github.com/user-attachments/assets/8e3fee6d-7403-45eb-a369-58e04c96c704
+
+
 ## Features
 - **ML Voice Isolation**: Real-time background noise suppression for clear audio.
 - **Advanced Audio Routing**: Designed to work with "Separate App Sound" on Samsung devices.
