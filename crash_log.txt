@@ -1,0 +1,191 @@
+--------- beginning of system
+--------- beginning of main
+01-13 08:11:53.984 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:00.763 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:01.860 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:02.931 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:07.133 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:08.192 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:09.256 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:16.516 20706 20706 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:12:16.520 20706 20706 E Zygote  : accessInfo : 1
+01-13 08:12:16.552 20706 20706 E roid.apps.turb: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:12:25.962 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:27.014 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:33.348 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:34.427 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:37.147 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:37.600 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:48.099 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:12:49.163 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:13:00.736 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:13:02.845 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:13:26.906 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:13:27.941 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:13:35.350 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:13:35.841 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:13:56.839  3919  4266 E ActivityTaskManager: TouchDown intent received, starting ActiveLaunch
+01-13 08:13:56.853 18812 18812 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:13:56.854 18812 18812 E Zygote  : accessInfo : 1
+01-13 08:13:56.914 18812 18812 E m.poise.androi: Unknown bits set in runtime_flags: 0x8000
+01-13 08:13:56.925  3919  3968 E system_server: Invalid ID 0x00000000.
+01-13 08:13:56.930  3489  3692 E Netd    : getNetworkForDns: getNetId from enterpriseCtrl is netid 0
+01-13 08:13:56.969  3919  3968 E DecorView: mWindow.mActivityCurrentConfig is null
+01-13 08:13:57.001  3919  4213 E PkgPredictorService-Collector: record changed bt=1  wifi=1 screen=0
+01-13 08:13:57.361  3537  3537 E Layer   : [Surface(name=AppWindowToken{d5bed87 token=Token{d5649c6 ActivityRecord{95183a1 u0 com.sec.android.app.launcher/.activities.LauncherActivity t6050}}})/@0xdef888f - animation-leash#0] No local sync point found, barrierLayer : [com.sec.android.app.launcher/com.sec.android.app.launcher.activities.LauncherActivity$_4790#0]
+01-13 08:13:57.361  3537  3537 E Layer   : [Surface(name=AppWindowToken{6ea0c1a token=Token{ab44ac5 ActivityRecord{498fd3c u0 com.poise.android/.MainActivity t6065}}})/@0x49efe96 - animation-leash#0] No local sync point found, barrierLayer : [com.sec.android.app.launcher/com.sec.android.app.launcher.activities.LauncherActivity$_4790#0]
+01-13 08:13:57.361  3537  3537 E Layer   : [Surface(name=a0a1925 com.android.systemui.ImageWallpaper)/@0x94f0191 - animation-leash#0] No local sync point found, barrierLayer : [com.sec.android.app.launcher/com.sec.android.app.launcher.activities.LauncherActivity$_4790#0]
+01-13 08:13:57.365  3537  3594 E BufferQueueProducer: [com.sec.android.app.launcher/com.sec.android.app.launcher.activities.LauncherActivity$_4790#0] disconnect: not connected (req=1)
+01-13 08:13:57.724  3919  3946 E WindowManager: App trying to use insecure INPUT_FEATURE_NO_INPUT_CHANNEL flag. Ignoring
+01-13 08:13:58.406  3919  3968 E WindowManager: win=Window{7ebf5be u0 Splash Screen com.poise.android EXITING} destroySurfaces: appStopped=false win.mWindowRemovalAllowed=true win.mRemoveOnExit=true win.mViewVisibility=0 caller=com.android.server.wm.AppWindowToken.destroySurfaces:24 com.android.server.wm.AppWindowToken.destroySurfaces:1 com.android.server.wm.WindowState.onExitAnimationDone:233 com.android.server.wm.WindowStateAnimator.onAnimationFinished:92 com.android.server.wm.WindowState.onAnimationFinished:5 com.android.server.wm.-$$Lambda$yVRF8YoeNdTa8GR1wDStVsHu8xM.run:2 com.android.server.wm.SurfaceAnimator.lambda$getFinishedCallback$0$SurfaceAnimator:17 
+01-13 08:13:58.423  3919  5625 E WindowManager: win=Window{2ae6240 u0 com.sec.android.app.launcher/com.sec.android.app.launcher.activities.LauncherActivity} destroySurfaces: appStopped=true win.mWindowRemovalAllowed=false win.mRemoveOnExit=false win.mViewVisibility=8 caller=com.android.server.wm.AppWindowToken.destroySurfaces:24 com.android.server.wm.AppWindowToken.destroySurfaces:1 com.android.server.wm.AppWindowToken.notifyAppStopped:30 com.android.server.wm.ActivityRecord.activityStoppedLocked:99 com.android.server.wm.ActivityTaskManagerService.activityStopped:59 android.app.IActivityTaskManager$Stub.onTransact:2280 android.os.Binder.execTransactInternal:1056 
+01-13 08:13:59.540  3919  5625 E WindowManager: App trying to use insecure INPUT_FEATURE_NO_INPUT_CHANNEL flag. Ignoring
+01-13 08:13:59.555  3919  5625 E WindowManager: App trying to use insecure INPUT_FEATURE_NO_INPUT_CHANNEL flag. Ignoring
+01-13 08:13:59.569  4326  4326 E DecorView: mWindow.mActivityCurrentConfig is null
+01-13 08:13:59.596  4326  4326 E DecorView: mWindow.mActivityCurrentConfig is null
+01-13 08:14:00.890  3537  4000 E BufferQueueProducer: [Sys2003:com.android.systemui/com.android.systemui.media.MediaProjectionPermissionActivity$_4326#0] disconnect: not connected (req=1)
+01-13 08:14:00.904  3919  5688 E InputDispatcher: Window handle Window{a887463 u0 Sys2003:com.android.systemui/com.android.systemui.media.MediaProjectionPermissionActivity} has no registered input channel
+01-13 08:14:00.921  3919  5688 E InputDispatcher: Window handle Window{a887463 u0 Sys2003:com.android.systemui/com.android.systemui.media.MediaProjectionPermissionActivity} has no registered input channel
+01-13 08:14:00.936  3919  5713 E InputDispatcher: Window handle Window{a887463 u0 Sys2003:com.android.systemui/com.android.systemui.media.MediaProjectionPermissionActivity} has no registered input channel
+01-13 08:14:00.946  4326  4326 E ViewRootImpl: sendUserActionEvent() mView returned.
+01-13 08:14:00.950  3489  3692 E Netd    : getNetworkForDns: getNetId from enterpriseCtrl is netid 0
+01-13 08:14:01.002  5200  5221 E bt_btif : set_device_volume bd_addr ceef62 gain 0.00
+01-13 08:14:01.003  5200  5463 E bt_btif : SetVolume: peer ceef62 gain 0.00
+01-13 08:14:01.029  3537  5224 E BufferQueueProducer: [com.android.systemui/com.android.systemui.media.MediaProjectionPermissionActivity$_4326#0] disconnect: not connected (req=1)
+01-13 08:14:01.053  3919  3968 E WindowManager: win=Window{87d6119 u0 com.android.systemui/com.android.systemui.media.MediaProjectionPermissionActivity EXITING} destroySurfaces: appStopped=false win.mWindowRemovalAllowed=true win.mRemoveOnExit=true win.mViewVisibility=0 caller=com.android.server.wm.AppWindowToken.destroySurfaces:24 com.android.server.wm.AppWindowToken.destroySurfaces:1 com.android.server.wm.WindowState.onExitAnimationDone:233 com.android.server.wm.-$$Lambda$01bPtngJg5AqEoOWfW3rWfV7MH4.accept:2 java.util.ArrayList.forEach:1262 com.android.server.wm.AppWindowToken.onAnimationFinished:219 com.android.server.wm.-$$Lambda$yVRF8YoeNdTa8GR1wDStVsHu8xM.run:2 
+01-13 08:14:01.140  3591  3680 E OMXNodeInstance: !!! Observer died. Quickly, do something, ... anything...
+01-13 08:14:01.494  5200  2556 E a2dp_sbc: setCodecConfig: min/max bitpool: source caps min/max = 0x2/0x35 sink info min/max = 0x2/0x26result min/max = 0x2/0x26
+01-13 08:14:01.495  5200  2556 E a2dp_codec: setCodecConfig: 1 0
+01-13 08:14:01.498  5200  2556 E a2dp_sbc_encoder: set_current_encoder_info simulcast 0 small bitpool 0 0x1 0x1 blocm_x_subband 0
+01-13 08:14:01.507 20885 20885 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:01.508 20885 20885 E Zygote  : accessInfo : 1
+01-13 08:14:01.519 20885 20885 E .app.soundaliv: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:02.022  3919  4574 E ActivityTaskManager: MachinLearning intent received, starting MlLaunch
+01-13 08:14:02.032  5200  2556 E a2dp_sbc_encoder: a2dp_sbc_get_num_frame_iteration: tx_sbc_frames not updated, update from here
+01-13 08:14:02.058 20908 20908 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:02.059 20908 20908 E Zygote  : accessInfo : 1
+01-13 08:14:02.067 20908 20908 E .masarat.salat: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:02.354 20935 20935 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:02.354 20935 20935 E Zygote  : accessInfo : 1
+01-13 08:14:02.366 20935 20935 E facebook.katan: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:02.380  3489  3692 E Netd    : getNetworkForDns: getNetId from enterpriseCtrl is netid 0
+01-13 08:14:02.381  3489  3692 E Netd    : getNetworkForDns: getNetId from enterpriseCtrl is netid 0
+01-13 08:14:02.407  3535  3535 E lmkd    : Error writing /proc/20706/oom_score_adj; errno=22
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 0ms: FacebookApplication instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 12ms: FirebaseInitCustomProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 13ms: SecureMessagingKeyContentProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 13ms: FirstPartyUserValuesLiteProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 14ms: FbContactsContentProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 14ms: FileProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 14ms: FirstPartyUserValuesProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 14ms: MessagesDbContentProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 14ms: UsdidValuesProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 14ms: InstallReferrerProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 14ms: AppManagerSsoProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 15ms: ThreadsDbPropertiesContentProvider instantiating…
+01-13 08:14:02.563 20935 20935 E SlowAppComponent: 15ms: ClientMessagePushDedupInfoProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 15ms: PlatformProviderBase instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 15ms: ContactsConnectionsProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 14ms: FeO2InAppContentProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 14ms: UserValuesProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 14ms: SecureFileProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 16ms: FoaBackupTokenProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 16ms: InitializationProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 19ms: PhotosProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 20ms: AttributionIdProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 20ms: QuickExperimentContentProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 20ms: TamAttachmentProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: 20ms: CacheProvider instantiating…
+01-13 08:14:02.564 20935 20935 E SlowAppComponent: Main thread was blocked for 51ms in the background starting with FacebookApplication
+01-13 08:14:02.731 20935 20972 E HeliumCrashReporter: Pending crash path /data/data/com.facebook.katana/cache/webview_embedded/Helium Crashpad/pending/ is not a directory
+01-13 08:14:02.808 20935 20983 E libEGL  : call to OpenGL ES API with no current context (logged once per thread)
+01-13 08:14:02.808 20935 20983 E libEGL  : call to OpenGL ES API with no current context (logged once per thread)
+01-13 08:14:02.811 20935 20983 E BufferQueueProducer: [SurfaceTexture-0-20935-0] disconnect: not connected (req=1)
+01-13 08:14:02.811 20935 20983 E libEGL  : call to OpenGL ES API with no current context (logged once per thread)
+01-13 08:14:02.949 20935 20972 E AppState: Returning default for first run info
+01-13 08:14:02.949 20935 20972 E AppState: Returning default for first run info
+01-13 08:14:03.055 21022 21022 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:03.056 21022 21022 E Zygote  : accessInfo : 1
+01-13 08:14:03.062 21022 21022 E gle.android.gm: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:03.217 20935 20973 E AppState: Returning default for first run info
+01-13 08:14:03.264 20935 20973 E AppState: Returning default for first run info
+01-13 08:14:03.264 20935 20973 E AppState: Returning default for first run info
+01-13 08:14:03.333 20935 21007 E DexLibLoader: could not find package com.google.android.art android.content.pm.PackageManager$NameNotFoundException: com.google.android.art
+01-13 08:14:03.351  3489  3692 E Netd    : getNetworkForDns: getNetId from enterpriseCtrl is netid 0
+01-13 08:14:03.565 18812 20871 E PoiseJNI: Failed to find ProcessingStats constructor
+--------- beginning of crash
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: FATAL EXCEPTION: DefaultDispatcher-worker-3
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: Process: com.poise.android, PID: 18812
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: java.lang.NoSuchMethodError: no non-static method "Lcom/poise/android/audio/ProcessingStats;.<init>(IDFIIFF)V"
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at com.poise.android.audio.PoiseProcessor.nativeGetStats(Native Method)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at com.poise.android.audio.PoiseProcessor.getStats(PoiseProcessor.kt:185)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at com.poise.android.audio.AudioPipeline.processAudioLoop(AudioPipeline.kt:187)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at com.poise.android.audio.AudioPipeline.access$processAudioLoop(AudioPipeline.kt:18)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at com.poise.android.audio.AudioPipeline$start$2$2.invokeSuspend(AudioPipeline.kt:72)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:108)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:115)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:103)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:584)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:793)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:697)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:684)
+01-13 08:14:03.578 18812 20871 E AndroidRuntime: 	Suppressed: kotlinx.coroutines.internal.DiagnosticCoroutineContextException: [StandaloneCoroutine{Cancelling}@d143f1b, Dispatchers.IO]
+01-13 08:14:03.635  3535  3535 E lmkd    : Error writing /proc/18812/oom_score_adj; errno=22
+01-13 08:14:03.663 21073 21073 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:03.664 21073 21073 E Zygote  : accessInfo : 1
+01-13 08:14:03.675  3919  3968 E SurfaceControl: [SEC_SF_EFFECTS] SurfaceControl.startSurfaceAnimation() sc=Surface(name=com.sec.android.app.launcher/com.sec.android.app.launcher.activities.LauncherActivity$_4790)/@0x9f43f72
+01-13 08:14:03.675 21073 21073 E ng.android.loo: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:03.676  3537  5182 E NativeSemDvfsGpuManager: acquire:: Start
+01-13 08:14:03.676  3537  5182 E NativeSemDvfsGpuManager: acquire:: timeout = 1000 mIsAcquired = 0  mTagName : SurfaceFlinger 
+01-13 08:14:03.677  3537  5182 E NativeCustomFrequencyManager: [NativeCFMS] BpCustomFrequencyManager::requestGPU() 
+01-13 08:14:03.677  3537  5182 E NativeSemDvfsGpuManager: acquire:: End
+01-13 08:14:03.794 21095 21095 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:03.795 21095 21095 E Zygote  : accessInfo : 1
+01-13 08:14:03.805 21095 21095 E ocess.gservice: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:03.967 21126 21126 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:03.968 21126 21126 E Zygote  : accessInfo : 1
+01-13 08:14:03.974 21126 21126 E android.dqagen: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:04.020 21145 21145 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:04.021 21145 21145 E Zygote  : accessInfo : 1
+01-13 08:14:04.025 21145 21145 E oid.sm.provide: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:04.368 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:14:04.678  3537  5181 E NativeSemDvfsGpuManager: release:: Start
+01-13 08:14:04.678  3537  5181 E NativeSemDvfsGpuManager: release():: mIsAcquired = 1 , mName = GPU  , mTagName : SurfaceFlinger 
+01-13 08:14:04.680  3537  5181 E NativeCustomFrequencyManager: [NativeCFMS] BpCustomFrequencyManager::releaseGPU() 
+01-13 08:14:04.680  3537  5181 E NativeSemDvfsGpuManager: release:: End
+01-13 08:14:05.327  3489  3692 E Netd    : getNetworkForDns: getNetId from enterpriseCtrl is netid 0
+01-13 08:14:05.338  3489  3692 E Netd    : getNetworkForDns: getNetId from enterpriseCtrl is netid 0
+01-13 08:14:05.760  3532  5782 E DlbDlbEffect: effectCommand() Unknown command code: 21
+01-13 08:14:05.974 21215 21215 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:05.977 21215 21215 E Zygote  : accessInfo : 1
+01-13 08:14:05.998 21215 21215 E .devicesecurit: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:06.255 21243 21243 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:06.259 21243 21243 E Zygote  : accessInfo : 1
+01-13 08:14:06.281 21243 21243 E droid.sm.polic: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:06.479 28704 28704 E HONEYBOARD: c activeNetwork is null 
+01-13 08:14:06.494 21243 21260 E SQLiteLog: (1) no such table: devicesecurity
+01-13 08:14:06.574  5200  5463 E bt_btif : bta_av_str_stopped: peer ceef62 handle:65 audio_open_cnt:0, p_data 0x78e58d9840 start:1 pendig_start:0
+01-13 08:14:06.624  5200  2556 E bt_stack: [ERROR:repeating_timer.cc(153)] RunTask: Periodic task execution took 11696 microseconds, longer than interval 10000 microseconds
+01-13 08:14:06.635  5200  2556 E bt_stack: [ERROR:repeating_timer.cc(153)] RunTask: Periodic task execution took 11181 microseconds, longer than interval 10000 microseconds
+01-13 08:14:06.647  5200  2556 E bt_stack: [ERROR:repeating_timer.cc(153)] RunTask: Periodic task execution took 10748 microseconds, longer than interval 10000 microseconds
+01-13 08:14:06.658  5200  2556 E bt_stack: [ERROR:repeating_timer.cc(153)] RunTask: Periodic task execution took 10626 microseconds, longer than interval 10000 microseconds
+01-13 08:14:06.668  5200  2556 E bt_stack: [ERROR:repeating_timer.cc(153)] RunTask: Periodic task execution took 10449 microseconds, longer than interval 10000 microseconds
+01-13 08:14:06.679  5200  3397 E bt_btif : btif_a2dp_command_ack: warning : no command pending, ignore ack
+01-13 08:14:13.697  5200  5463 E bt_btif : bta_dm_pm_btm_status hci_status=36
+01-13 08:14:15.894  3507  3614 E Sensors : Sensor : Meta event
+01-13 08:14:19.827 21270 21270 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:19.831 21270 21270 E Zygote  : accessInfo : 1
+01-13 08:14:19.851 21270 21270 E rbandroid.slee: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:19.949  3507  3614 E Sensors : Sensor : Meta event
+01-13 08:14:20.380  3919  5629 E PackageManager: Failed to find package; permName: android.permission.INTERNET, uid: 99052, caller: 1000
+01-13 08:14:20.413 21314 21314 E Zygote  : accessInfo : 0
+01-13 08:14:20.439 21314 21314 E ocessService0:: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:20.764 21357 21357 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:20.768 21357 21357 E Zygote  : accessInfo : 1
+01-13 08:14:20.784 21357 21357 E webview_servic: Not starting debugger since process cannot load the jdwp agent.
+01-13 08:14:21.748  3507  3614 E Sensors : Sensor : Meta event
+01-13 08:14:22.002  3535  3535 E lmkd    : Error writing /proc/21145/oom_score_adj; errno=22
+01-13 08:14:24.973 21416 21416 E Zygote  : isWhitelistProcess - Process is Whitelisted
+01-13 08:14:24.976 21416 21416 E Zygote  : accessInfo : 1
+01-13 08:14:24.993 21416 21416 E gle.android.gm: Not starting debugger since process cannot load the jdwp agent.

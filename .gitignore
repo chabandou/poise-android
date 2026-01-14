@@ -1,0 +1,30 @@
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Android Studio / IntelliJ / VSCode
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# NDK
+.cxx/
+.externalNativeBuild/
+
+# Misc system files
+.DS_Store
+Thumbs.db
+
+# Android artifacts
+captures/
+*.apk
+*.ap_
+
+# Project specific
+*.bin
+/gtcrn
