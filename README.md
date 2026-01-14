@@ -1,6 +1,6 @@
 # Poise Android
 
-A high-performance voice isolation and audio routing tool for Android.
+A high-performance voice isolation app that uses machine learning denoising models to isolate speech in real-time for system-wide Android audio. Currently works only with samsung devices through the 'Separate app sound' feature.
 
 ![Poise Android Demo](./media/demo.gif)
 
