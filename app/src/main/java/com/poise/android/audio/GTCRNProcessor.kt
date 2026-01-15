@@ -68,6 +68,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     // Statistics
     private var frameCount = 0
     private var totalInferenceTimeMs = 0.0
+    private var smoothedInferenceTimeMs = 0.0 // EMA for live stats
     private var vadBypassed = 0
 
     init {
@@ -179,6 +180,13 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
             val enhancedStft = runOnnxInference() ?: return frame
             val inferenceMs = (System.nanoTime() - startTime) / 1_000_000.0
             totalInferenceTimeMs += inferenceMs
+
+            // Update EMA (alpha = 0.1 means 10% weight to new sample)
+            if (smoothedInferenceTimeMs == 0.0) {
+                smoothedInferenceTimeMs = inferenceMs
+            } else {
+                smoothedInferenceTimeMs = 0.9 * smoothedInferenceTimeMs + 0.1 * inferenceMs
+            }
 
             // 4. Reconstruct audio (native iSTFT with overlap-add)
             val enhanced = nativeReconstruct(stftHandle, enhancedStft)
@@ -327,25 +335,25 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     fun getStats(): ProcessingStats {
         val displayFrames = frameCount
         val vadBypassRatio = if (frameCount > 0) vadBypassed.toFloat() / frameCount else 0f
-        val onnxFrames = frameCount - vadBypassed
-
         val rtf =
-                if (onnxFrames > 0) {
-                    val avgMs = totalInferenceTimeMs / onnxFrames
+                if (smoothedInferenceTimeMs > 0) {
                     val frameDurationMs = (FRAME_SIZE.toFloat() / SAMPLE_RATE) * 1000
-                    (avgMs / frameDurationMs).toFloat()
+                    (smoothedInferenceTimeMs / frameDurationMs).toFloat()
                 } else {
                     0f
                 }
 
         return ProcessingStats(
                 frameCount = displayFrames,
-                avgTimeMs = if (onnxFrames > 0) totalInferenceTimeMs / onnxFrames else 0.0,
+                avgTimeMs =
+                        smoothedInferenceTimeMs, // Return smoothed current value instead of global
+                // avg
                 rtf = rtf,
                 vadTotal = frameCount,
                 vadActive = frameCount - vadBypassed,
                 vadBypassed = vadBypassed,
-                vadBypassRatio = vadBypassRatio
+                vadBypassRatio = vadBypassRatio,
+                isVadDetected = framesSinceActive < hangFrames // Active if within hang time
         )
     }
 
@@ -357,6 +365,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         nativeSTFTReset(stftHandle)
         frameCount = 0
         totalInferenceTimeMs = 0.0
+        smoothedInferenceTimeMs = 0.0
         vadBypassed = 0
         framesSinceActive = hangFrames + 1
         Log.i(TAG, "GTCRNProcessor reset")

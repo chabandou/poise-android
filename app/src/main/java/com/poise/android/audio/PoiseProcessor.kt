@@ -220,7 +220,8 @@ class PoiseProcessor(
                 vadTotal = totalFrames,
                 vadActive = totalFrames - vadBypassed,
                 vadBypassed = vadBypassed,
-                vadBypassRatio = vadBypassRatio
+                vadBypassRatio = vadBypassRatio,
+                isVadDetected = true // Default to true as we don't have hang time tracking here yet
         )
     }
 

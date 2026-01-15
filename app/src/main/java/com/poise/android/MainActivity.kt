@@ -73,10 +73,13 @@ class MainActivity : ComponentActivity() {
                     val isRunning by AudioServiceState.isRunning.collectAsState()
                     val isStarting by AudioServiceState.isStarting.collectAsState()
                     val stats by AudioServiceState.stats.collectAsState()
+                    val outputVolume by AudioServiceState.outputVolume.collectAsState()
 
                     MainScreen(
                             isProcessing = isRunning || isStarting,
                             stats = stats,
+                            outputVolume = outputVolume,
+                            onVolumeChange = { AudioServiceState.setOutputVolume(it) },
                             onToggleProcessing = { shouldStart ->
                                 if (shouldStart) {
                                     startProcessing()

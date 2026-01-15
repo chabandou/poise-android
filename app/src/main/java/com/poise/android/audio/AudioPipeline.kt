@@ -227,6 +227,12 @@ class AudioPipeline(
                                 ProcessorModel.LEGACY -> processedAudio
                             }
 
+                    // Apply output volume from UI slider
+                    val volume = AudioServiceState.outputVolume.value
+                    for (i in outputAudio.indices) {
+                        outputAudio[i] = (outputAudio[i] * volume).coerceIn(-1f, 1f)
+                    }
+
                     audioTrack?.write(outputAudio, 0, outputAudio.size, AudioTrack.WRITE_BLOCKING)
                 }
 

@@ -22,6 +22,14 @@ object AudioServiceState {
     private val _isStarting = MutableStateFlow(false)
     val isStarting: StateFlow<Boolean> = _isStarting.asStateFlow()
 
+    // Output volume (0.0 to 1.0, default 38%)
+    private val _outputVolume = MutableStateFlow(0.38f)
+    val outputVolume: StateFlow<Float> = _outputVolume.asStateFlow()
+
+    fun setOutputVolume(volume: Float) {
+        _outputVolume.value = volume.coerceIn(0f, 1f)
+    }
+
     fun setRunning(running: Boolean) {
         _isRunning.value = running
         if (running) {

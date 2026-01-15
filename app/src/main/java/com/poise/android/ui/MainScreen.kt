@@ -61,6 +61,8 @@ fun Modifier.gradientText(brush: Brush): Modifier =
 fun MainScreen(
         isProcessing: Boolean,
         stats: ProcessingStats?,
+        outputVolume: Float,
+        onVolumeChange: (Float) -> Unit,
         onToggleProcessing: (Boolean) -> Unit
 ) {
         // Animations for colors
@@ -131,15 +133,15 @@ fun MainScreen(
                 )
 
                 // Main Content
+                // Main Content
                 Column(
                         modifier =
                                 Modifier.fillMaxSize()
                                         .statusBarsPadding()
                                         .navigationBarsPadding()
-                                        .padding(24.dp),
+                                        .padding(horizontal = 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                        Spacer(modifier = Modifier.height(60.dp))
 
                         // 3. Header
                         Text(
@@ -149,7 +151,7 @@ fun MainScreen(
                                 fontWeight = FontWeight.Black,
                                 fontStyle = FontStyle.Italic,
                                 color = headerColor,
-                                modifier = Modifier // Removed rotation
+                                modifier = Modifier
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -173,7 +175,8 @@ fun MainScreen(
                                 )
                         }
 
-                        Spacer(modifier = Modifier.weight(1f))
+                        // Top Spacer - Bias upwards (0.1f) vs Bottom (0.9f)
+                        Spacer(modifier = Modifier.weight(0.1f))
 
                         // 4. Main Button
                         MainButton(
@@ -181,27 +184,54 @@ fun MainScreen(
                                 onToggle = { onToggleProcessing(!isProcessing) }
                         )
 
-                        Spacer(modifier = Modifier.weight(1f))
+                        // Compact Spacing
+                        Spacer(modifier = Modifier.height(0.dp))
 
-                        // 5. Cards (Setup vs Active)
-                        Box(
-                                modifier =
-                                        Modifier.fillMaxWidth()
-                                                .height(180.dp)
-                                                .zIndex(1f), // Fixed height area
-                                contentAlignment = Alignment.BottomCenter
-                        ) {
-                                if (isProcessing) {
-                                        LiveMetricsCard(stats, isVisible = isProcessing)
-                                } else {
-                                        SetupGuideCard(
-                                                isVisible = !isProcessing,
-                                                onClick = { showModal = true }
-                                        )
+                        // 5. Volume Slider
+                        AudioVolumeSlider(
+                                volume = outputVolume,
+                                onVolumeChange = onVolumeChange,
+                                accentColor = subHeaderColor
+                        )
+
+                        // Stabilized Card Section
+                        // Wrapped in 0-height box so the variable card height doesn't affect
+                        // the weighted spacing above (keeping Button/Slider position constant)
+                        Box(modifier = Modifier.fillMaxWidth().height(0.dp)) {
+                                Column(
+                                        modifier =
+                                                Modifier.wrapContentHeight(
+                                                        align = Alignment.Top,
+                                                        unbounded = true
+                                                )
+                                ) {
+                                        // Compact Spacing (preserved)
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        // 6. Cards (Setup vs Active)
+                                        Box(
+                                                modifier =
+                                                        Modifier.fillMaxWidth()
+                                                                .zIndex(1f), // Natural height
+                                                contentAlignment = Alignment.BottomCenter
+                                        ) {
+                                                if (isProcessing) {
+                                                        LiveMetricsCard(
+                                                                stats,
+                                                                isVisible = isProcessing
+                                                        )
+                                                } else {
+                                                        SetupGuideCard(
+                                                                isVisible = !isProcessing,
+                                                                onClick = { showModal = true }
+                                                        )
+                                                }
+                                        }
                                 }
                         }
 
-                        Spacer(modifier = Modifier.height(32.dp))
+                        // Bottom Spacer - Larger weight pushes content up
+                        Spacer(modifier = Modifier.weight(0.9f))
                 }
 
                 // Modal overlay - must be OUTSIDE the Column to overlay entire screen
@@ -220,7 +250,7 @@ fun MainButton(isProcessing: Boolean, onToggle: () -> Unit) {
 
         Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(240.dp) // Container
+                modifier = Modifier.size(190.dp) // Container matches button size
         ) {
                 // Outline Ripple Effect (Active Only)
                 if (isProcessing) {
@@ -476,6 +506,23 @@ fun LiveMetricsCard(stats: ProcessingStats?, isVisible: Boolean) {
                         label = "pingScale"
                 )
 
+        // Determine health status for metric coloring
+        val rtfThreshold = 1.0f
+        val latencyThreshold = 100.0 // Double to match avgTimeMs type
+        val currentRtf = stats?.rtf ?: 0f
+        val currentLatency = stats?.avgTimeMs ?: 0.0
+        val isHealthy = currentRtf < rtfThreshold && currentLatency < latencyThreshold
+
+        val isVadActive = stats?.isVadDetected == true
+
+        // Dim colors if VAD is idle
+        val metricColor: Color =
+                if (isVadActive) {
+                        if (isHealthy) PoiseLime else PoiseOrange
+                } else {
+                        Color.White.copy(alpha = 0.3f)
+                }
+
         Card(
                 modifier = Modifier.fillMaxWidth(), // Height determined by content
                 shape = BeveledShape,
@@ -541,7 +588,12 @@ fun LiveMetricsCard(stats: ProcessingStats?, isVisible: Boolean) {
                                                                         .background(
                                                                                 PoiseLime.copy(
                                                                                         alpha =
-                                                                                                pingAlpha
+                                                                                                if (stats?.isVadDetected ==
+                                                                                                                true
+                                                                                                )
+                                                                                                        pingAlpha
+                                                                                                else
+                                                                                                        0f
                                                                                 ),
                                                                                 CircleShape
                                                                         )
@@ -550,15 +602,23 @@ fun LiveMetricsCard(stats: ProcessingStats?, isVisible: Boolean) {
                                                         modifier =
                                                                 Modifier.size(6.dp)
                                                                         .background(
-                                                                                PoiseLime,
+                                                                                if (stats?.isVadDetected ==
+                                                                                                true
+                                                                                )
+                                                                                        PoiseLime
+                                                                                else PoiseOrange,
                                                                                 CircleShape
                                                                         )
                                                 )
                                         }
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                                text = "ACTIVE",
-                                                color = PoiseLime,
+                                                text =
+                                                        if (stats?.isVadDetected == true) "ACTIVE"
+                                                        else "IDLE",
+                                                color =
+                                                        if (stats?.isVadDetected == true) PoiseLime
+                                                        else PoiseOrange,
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Black,
                                                 fontStyle = FontStyle.Italic
@@ -566,7 +626,7 @@ fun LiveMetricsCard(stats: ProcessingStats?, isVisible: Boolean) {
                                 }
                         }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         // Metrics Row
                         Row(
@@ -580,12 +640,7 @@ fun LiveMetricsCard(stats: ProcessingStats?, isVisible: Boolean) {
                                                                 ?: "1.08",
                                                 fontSize = 32.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                modifier =
-                                                        Modifier.gradientText(
-                                                                Brush.verticalGradient(
-                                                                        MetricValueGradient
-                                                                )
-                                                        )
+                                                color = metricColor
                                         )
                                 }
 
@@ -604,12 +659,7 @@ fun LiveMetricsCard(stats: ProcessingStats?, isVisible: Boolean) {
                                                                 ?: "17.3",
                                                 fontSize = 32.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                modifier =
-                                                        Modifier.gradientText(
-                                                                Brush.verticalGradient(
-                                                                        MetricValueGradient
-                                                                )
-                                                        )
+                                                color = metricColor
                                         )
                                 }
 
@@ -618,83 +668,16 @@ fun LiveMetricsCard(stats: ProcessingStats?, isVisible: Boolean) {
                                         modifier = Modifier.height(40.dp).width(1.dp)
                                 )
 
-                                // VAD SKIP
-                                MetricColumn("VAD SKIP") {
-                                        Row(verticalAlignment = Alignment.Bottom) {
-                                                Text(
-                                                        text =
-                                                                stats?.let {
-                                                                        String.format(
-                                                                                "%.0f",
-                                                                                it.vadBypassPercent
-                                                                        )
-                                                                }
-                                                                        ?: "95",
-                                                        fontSize = 32.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier =
-                                                                Modifier.gradientText(
-                                                                        Brush.verticalGradient(
-                                                                                MetricValueGradient
-                                                                        )
-                                                                )
-                                                )
-                                                Text(
-                                                        text = "%",
-                                                        fontSize = 18.sp,
-                                                        fontWeight = FontWeight.Medium,
-                                                        color = Color.White.copy(alpha = 0.7f),
-                                                        modifier = Modifier.padding(bottom = 4.dp)
-                                                )
-                                        }
-                                }
-                        }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Progress Bar with Shimmer
-                        val progress = stats?.let { (1f - (it.rtf / 2f)).coerceIn(0f, 1f) } ?: 0.75f
-                        Box(
-                                modifier =
-                                        Modifier.fillMaxWidth()
-                                                .height(6.dp)
-                                                .background(
-                                                        Color(0xFF334155).copy(alpha = 0.3f),
-                                                        CircleShape
-                                                ) // slate-700/30
-                        ) {
-                                Box(
-                                        modifier =
-                                                Modifier.fillMaxWidth(fraction = progress)
-                                                        .fillMaxHeight()
-                                                        .background(
-                                                                Brush.horizontalGradient(
-                                                                        listOf(PoiseLime, PoiseCyan)
-                                                                ),
-                                                                CircleShape
-                                                        )
-                                )
-                        }
-
-                        // Load Status Logic
-                        val isHighLoad = (stats?.rtf ?: 0f) > 0.9f
-                        if (isHighLoad) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
+                                // STATUS - shows service running state
+                                MetricColumn("STATUS") {
+                                        val isActive = stats != null
                                         Text(
-                                                text = "HIGH LOAD",
-                                                color = PoiseLime,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Black,
-                                                fontStyle = FontStyle.Italic
-                                        )
-                                        Text(
-                                                text = "Processing delay detected",
-                                                color = Color.White.copy(alpha = 0.5f),
-                                                fontSize = 10.sp
+                                                text = if (isActive) "ON" else "OFF",
+                                                fontSize = 32.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color =
+                                                        if (isActive) PoiseLime
+                                                        else Color.White.copy(alpha = 0.5f)
                                         )
                                 }
                         }
@@ -859,5 +842,100 @@ fun SetupStep(number: String, title: String, description: String) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(description, color = Color.Gray, fontSize = 11.sp, lineHeight = 14.sp)
                 }
+        }
+}
+
+@Composable
+fun AudioVolumeSlider(volume: Float, onVolumeChange: (Float) -> Unit, accentColor: Color) {
+        val percentValue = (volume * 100).toInt()
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+                // Header row: Labels + Percentage
+                // Header row: Labels + Percentage
+                Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                ) {
+                        Column(
+                                modifier =
+                                        Modifier.drawBehind {
+                                                        // Left accent bar with bevel
+                                                        val w = 4.dp.toPx()
+                                                        val h = size.height
+                                                        val path =
+                                                                androidx.compose.ui.graphics.Path()
+                                                                        .apply {
+                                                                                moveTo(0f, 0f)
+                                                                                lineTo(w, 0f)
+                                                                                lineTo(w, h)
+                                                                                lineTo(
+                                                                                        0f,
+                                                                                        h - w
+                                                                                ) // Bevel
+                                                                                // bottom-left
+                                                                                close()
+                                                                        }
+                                                        drawPath(path, color = accentColor)
+                                                }
+                                                .padding(start = 16.dp)
+                        ) {
+                                Text(
+                                        text = "OUTPUT",
+                                        color = Color.White.copy(alpha = 0.5f),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        letterSpacing = 1.sp
+                                )
+                                Text(
+                                        text = "AUDIO VOLUME",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Black,
+                                        fontStyle = FontStyle.Italic
+                                )
+                        }
+                        Row(verticalAlignment = Alignment.Bottom) {
+                                Text(
+                                        text = "$percentValue",
+                                        fontSize = 32.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier =
+                                                Modifier.gradientText(
+                                                        Brush.verticalGradient(
+                                                                listOf(
+                                                                        accentColor,
+                                                                        accentColor.copy(
+                                                                                alpha = 0.8f
+                                                                        )
+                                                                )
+                                                        )
+                                                )
+                                )
+                                Text(
+                                        text = " %",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                        }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Slider
+                Slider(
+                        value = volume,
+                        onValueChange = onVolumeChange,
+                        valueRange = 0f..1f,
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                        colors =
+                                SliderDefaults.colors(
+                                        thumbColor = accentColor,
+                                        activeTrackColor = accentColor.copy(alpha = 0.6f),
+                                        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                )
+                )
         }
 }

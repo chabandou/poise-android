@@ -33,8 +33,11 @@ class AudioCaptureService : Service() {
 
         const val ACTION_START = "com.poise.android.START_CAPTURE"
         const val ACTION_STOP = "com.poise.android.STOP_CAPTURE"
+        const val ACTION_VOLUME_UP = "com.poise.android.VOLUME_UP"
+        const val ACTION_VOLUME_DOWN = "com.poise.android.VOLUME_DOWN"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
+        private const val VOLUME_STEP = 0.1f // 10% per tap
 
         private var instance: AudioCaptureService? = null
 
@@ -88,6 +91,16 @@ class AudioCaptureService : Service() {
             }
             ACTION_STOP -> {
                 stopCapture()
+            }
+            ACTION_VOLUME_UP -> {
+                val current = AudioServiceState.outputVolume.value
+                AudioServiceState.setOutputVolume(current + VOLUME_STEP)
+                updateNotification()
+            }
+            ACTION_VOLUME_DOWN -> {
+                val current = AudioServiceState.outputVolume.value
+                AudioServiceState.setOutputVolume(current - VOLUME_STEP)
+                updateNotification()
             }
         }
         return START_NOT_STICKY
@@ -255,21 +268,51 @@ class AudioCaptureService : Service() {
         val stopIntent =
                 PendingIntent.getService(
                         this,
-                        0,
+                        1,
                         Intent(this, AudioCaptureService::class.java).apply {
                             action = ACTION_STOP
                         },
                         PendingIntent.FLAG_IMMUTABLE
                 )
 
+        val volumeUpIntent =
+                PendingIntent.getService(
+                        this,
+                        2,
+                        Intent(this, AudioCaptureService::class.java).apply {
+                            action = ACTION_VOLUME_UP
+                        },
+                        PendingIntent.FLAG_IMMUTABLE
+                )
+
+        val volumeDownIntent =
+                PendingIntent.getService(
+                        this,
+                        3,
+                        Intent(this, AudioCaptureService::class.java).apply {
+                            action = ACTION_VOLUME_DOWN
+                        },
+                        PendingIntent.FLAG_IMMUTABLE
+                )
+
+        val volumePercent = (AudioServiceState.outputVolume.value * 100).toInt()
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Poise Voice Isolator")
-                .setContentText("Processing audio...")
+                .setContentText("Volume: $volumePercent%")
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentIntent(pendingIntent)
+                .addAction(R.drawable.ic_volume_down, "−", volumeDownIntent)
+                .addAction(R.drawable.ic_volume_up, "+", volumeUpIntent)
                 .addAction(R.drawable.ic_stop, "Stop", stopIntent)
                 .setOngoing(true)
                 .build()
+    }
+
+    private fun updateNotification() {
+        val notification = createNotification()
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
