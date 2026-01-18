@@ -7,7 +7,7 @@ A high-performance voice isolation app that uses machine learning denoising mode
 ## Features
 - **ML Voice Isolation**: Real-time background noise suppression for clear audio.
 - **Advanced Audio Routing**: Designed to work with "Separate App Sound" on Samsung devices.
-- **Immersive UI**: Edge-to-edge dark aesthetics with live audio metrics.
+- **Voice Activity Detection**: Will only run inference and process audio when it detects sound.
 
 > **Note**: The app need casting permissions to access the audio stream and route it properly.
 
