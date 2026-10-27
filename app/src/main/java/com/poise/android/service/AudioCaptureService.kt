@@ -102,6 +102,17 @@ class AudioCaptureService : Service() {
                 }
             }
 
+    // Unplugging headphones would move our output to the earpiece or speaker
+    private val unplugReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    if (!PoiseSettings.stopOnUnplug.value || audioPipeline == null) return
+                    Log.i(TAG, "Headphones disconnected, stopping")
+                    stopCapture()
+                }
+            }
+    private var watchingUnplug = false
+
     private fun stepOutputVolume(steps: Int) {
         AudioServiceState.setOutputVolume(AudioServiceState.outputVolume.value + steps * VOLUME_STEP)
     }
@@ -109,6 +120,7 @@ class AudioCaptureService : Service() {
     override fun onCreate() {
         super.onCreate()
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        PoiseSettings.init(this)
         createNotificationChannel()
         Log.i(TAG, "Service created")
     }
@@ -198,6 +210,14 @@ class AudioCaptureService : Service() {
                 Handler(Looper.getMainLooper())
         )
 
+        ContextCompat.registerReceiver(
+                this,
+                unplugReceiver,
+                IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        watchingUnplug = true
+
         // Mute STREAM_MUSIC - our output on the voice call stream still plays
         muteSystemAudio()
 
@@ -238,6 +258,10 @@ class AudioCaptureService : Service() {
             watchingMediaVolume = false
         }
         restoreSystemAudio(this)
+        if (watchingUnplug) {
+            unregisterReceiver(unplugReceiver)
+            watchingUnplug = false
+        }
 
         // Stop pipeline
         audioPipeline?.stop()

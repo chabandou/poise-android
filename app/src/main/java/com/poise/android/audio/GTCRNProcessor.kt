@@ -72,7 +72,17 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
 
     // VAD
     private var vadThresholdLinear = Math.pow(10.0, vadThresholdDb / 20.0).toFloat()
-    private var framesSinceActive = 0
+    /** Frames quieter than this skip the model. */
+    var silenceThresholdDb = vadThresholdDb
+        set(value) {
+            field = value
+            vadThresholdLinear = Math.pow(10.0, value / 20.0).toFloat()
+        }
+    /** Share of the input's spectrum mixed back under the model's output (0 = none). */
+    var residualGain = 0f
+    /** Quiet frames in a row, since the last frame above [silenceThresholdDb]. */
+    var framesSinceActive = 0
+        private set
     private val hangFrames = ((300.0 * SAMPLE_RATE / 1000) / FRAME_SIZE).toInt() // 300ms hang time
 
     // Statistics
@@ -185,7 +195,17 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                         }
 
                         // A failed run passes the spectrum through, keeping the same delay
-                        modelOutput ?: stftResult
+                        if (modelOutput == null) {
+                            stftResult
+                        } else {
+                            // Mixed per bin before the iSTFT, so input and output line up
+                            if (residualGain > 0f) {
+                                for (i in modelOutput.indices) {
+                                    modelOutput[i] += residualGain * (stftResult[i] - modelOutput[i])
+                                }
+                            }
+                            modelOutput
+                        }
                     } else {
                         for (i in stftResult.indices) stftResult[i] *= BYPASS_GAIN
                         stftResult

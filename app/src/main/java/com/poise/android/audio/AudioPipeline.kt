@@ -6,6 +6,7 @@ import android.media.projection.MediaProjection
 import android.os.Process
 import android.util.Log
 import com.poise.android.service.AudioServiceState
+import com.poise.android.service.PoiseSettings
 import java.util.concurrent.Executors
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -190,6 +191,7 @@ class AudioPipeline(private val context: Context) {
         var framesWritten = 0L
         var lostFrames = 0L
         var skippedFrames = 0L
+        applySettings()
 
         while (_isRunning.value && currentCoroutineContext().isActive) {
             try {
@@ -227,6 +229,14 @@ class AudioPipeline(private val context: Context) {
                 if (statsUpdateCounter >= 10) {
                     statsUpdateCounter = 0
                     gtcrnProcessor?.getStats()?.let { AudioServiceState.updateStats(it) }
+                    applySettings()
+
+                    val autoStopMinutes = PoiseSettings.autoStopMinutes.value
+                    val quietFrames = gtcrnProcessor?.framesSinceActive ?: 0
+                    if (autoStopMinutes > 0 && quietFrames >= autoStopMinutes * 60 * SAMPLE_RATE / FRAME_SIZE) {
+                        Log.i(TAG, "Nothing played for $autoStopMinutes min, stopping")
+                        break
+                    }
 
                     // Each underrun is a click: give the track one more frame of headroom
                     audioTrack?.let { track ->
@@ -271,6 +281,13 @@ class AudioPipeline(private val context: Context) {
                 Log.e(TAG, "Processing error: ${e.message}")
             }
         }
+    }
+
+    private fun applySettings() {
+        val processor = gtcrnProcessor ?: return
+        processor.silenceThresholdDb = PoiseSettings.silenceDb.value.toFloat()
+        processor.residualGain =
+                Math.pow(10.0, PoiseSettings.reductionDb(PoiseSettings.strength.value) / 20.0).toFloat()
     }
 
     /** Frames captured so far, extrapolated to now, or null while capture has no timestamp yet. */

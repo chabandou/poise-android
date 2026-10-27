@@ -18,12 +18,13 @@ object AudioServiceState {
     private val _stats = MutableStateFlow<ProcessingStats?>(null)
     val stats: StateFlow<ProcessingStats?> = _stats.asStateFlow()
 
-    // Output volume (0.0 to 1.0, default 38%)
+    // Output volume (0.0 to 1.0, 38% until the user sets it; saved in PoiseSettings)
     private val _outputVolume = MutableStateFlow(0.38f)
     val outputVolume: StateFlow<Float> = _outputVolume.asStateFlow()
 
     fun setOutputVolume(volume: Float) {
         _outputVolume.value = volume.coerceIn(0f, 1f)
+        PoiseSettings.saveVolume(_outputVolume.value) // remembered for the next launch
     }
 
     fun setActive(active: Boolean) {
