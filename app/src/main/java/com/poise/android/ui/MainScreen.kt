@@ -459,7 +459,7 @@ fun SetupGuideCard(isVisible: Boolean, onClick: () -> Unit) {
                                         fontSize = 16.sp
                                 )
                                 Text(
-                                        text = "Configure audio routing",
+                                        text = "How to use Poise",
                                         color = PoiseTextSecondary,
                                         fontSize = 12.sp
                                 )
@@ -772,20 +772,20 @@ fun SetupModal(onDismiss: () -> Unit) {
 
                                 SetupStep(
                                         "1",
-                                        "SEPARATE APP SOUND",
-                                        "Go to Settings → Sounds → Separate App Sound. Enable it for the app you want to denoise and set the audio device to 'Phone'."
+                                        "CONNECT HEADPHONES",
+                                        "Poise plays through wired or Bluetooth headphones. Without them, its sound comes from the earpiece."
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
                                 SetupStep(
                                         "2",
-                                        "AUDIO ROUTING",
-                                        "Mute your phone speaker completely. Only increase the volume on your connected headphones/earbuds."
+                                        "START POISE",
+                                        "Press START and allow the requests. When asked what to share, choose the entire screen or the app you want to clean up."
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
                                 SetupStep(
                                         "3",
-                                        "START POISE",
-                                        "Press the START button below. Poise will capture the routed audio and output clean, denoised sound to your headphones."
+                                        "PLAY YOUR AUDIO",
+                                        "Play a video or podcast. Poise mutes the original and plays the cleaned-up sound; the volume keys and the slider set its volume. Apps that block audio capture stay silent."
                                 )
 
                                 Spacer(modifier = Modifier.height(32.dp))

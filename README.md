@@ -1,15 +1,15 @@
 # Poise Android
 
-A high-performance voice isolation app that uses machine learning denoising models to isolate speech in real-time for system-wide Android audio. Currently works only with samsung devices through the 'Separate app sound' feature.
+A high-performance voice isolation app that uses machine learning denoising models to isolate speech in real-time for system-wide Android audio. Works on Android 10 and later, with wired or Bluetooth headphones.
 
 ![Poise Android Demo](./media/demo.gif)
 
 ## Features
 - **ML Voice Isolation**: Real-time background noise suppression for clear audio.
-- **Advanced Audio Routing**: Designed to work with "Separate App Sound" on Samsung devices.
+- **Automatic Audio Routing**: Captures the playing app's audio, mutes the original while Poise runs, and plays the cleaned-up sound to your headphones. The volume keys control Poise's volume.
 - **Voice Activity Detection**: Will only run inference and process audio when it detects sound.
 
-> **Note**: The app need casting permissions to access the audio stream and route it properly.
+> **Note**: The app needs screen-casting permission to capture other apps' audio. Apps that block audio capture (some streaming apps) stay silent while Poise runs.
 
 ## Installation
 
@@ -19,7 +19,7 @@ Untill I officially publish on the Play Store, you can install the app from the 
 
 ### Prerequisites
 - Android SDK & JDK 17+
-- Android Device (Samsung recommended for specific routing features)
+- Android 10+ device and headphones (wired or Bluetooth)
 
 ### Build & Install
 ```bash
