@@ -27,6 +27,11 @@ import com.poise.android.ui.theme.PoiseAndroidTheme
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        // Sent by the Quick Settings tile to start a session
+        const val ACTION_START = "com.poise.android.START_FROM_TILE"
+    }
+
     private var pendingStart = false
 
     private val mediaProjectionLauncher =
@@ -96,6 +101,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        // Not on recreation (e.g. rotation), which delivers the same intent again
+        if (savedInstanceState == null) startIfAsked(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        startIfAsked(intent)
+    }
+
+    private fun startIfAsked(intent: Intent?) {
+        if (intent?.action == ACTION_START && !AudioServiceState.isActive.value) startProcessing()
     }
 
     private fun startProcessing() {

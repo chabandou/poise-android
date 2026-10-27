@@ -38,6 +38,18 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <!-- Quick Settings tile to start and stop Poise -->
+        <service
+            android:name=".service.PoiseTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_wave"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>

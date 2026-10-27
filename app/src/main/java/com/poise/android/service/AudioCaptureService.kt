@@ -334,15 +334,22 @@ class AudioCaptureService : Service() {
                         PendingIntent.FLAG_IMMUTABLE
                 )
 
-        val volumePercent = (AudioServiceState.outputVolume.value * 100).toInt()
+        val volumePercent = Math.round(AudioServiceState.outputVolume.value * 100)
 
+        // A draggable slider isn't allowed in notifications, so the bar shows the volume and
+        // the buttons change it.
         return NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Poise Voice Isolator")
-                .setContentText("Volume: $volumePercent%")
-                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("Isolating voices")
+                .setContentText("Volume $volumePercent%")
+                .setProgress(100, volumePercent, false)
+                .setSmallIcon(R.drawable.ic_wave)
+                .setColor(ContextCompat.getColor(this, R.color.poise_cyan))
+                .setColorized(true)
+                .setShowWhen(false)
+                .setOnlyAlertOnce(true)
                 .setContentIntent(pendingIntent)
-                .addAction(R.drawable.ic_volume_down, "−", volumeDownIntent)
-                .addAction(R.drawable.ic_volume_up, "+", volumeUpIntent)
+                .addAction(R.drawable.ic_volume_down, "Volume −", volumeDownIntent)
+                .addAction(R.drawable.ic_volume_up, "Volume +", volumeUpIntent)
                 .addAction(R.drawable.ic_stop, "Stop", stopIntent)
                 .setOngoing(true)
                 .build()
