@@ -33,10 +33,6 @@ android {
         }
     }
 
-    aaptOptions {
-        ignoreAssetsPattern = "!denoiser_model.onnx"
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false

@@ -14,7 +14,6 @@ val PoiseTextSecondary = Color(0xFF94A3B8) // slate-400
 // Brand Colors
 val PoiseCyan = Color(0xFF22D3EE) // cyan-400
 val PoiseLime = Color(0xFFB6FF00) // #b6ff00 (Lime)
-val PoiseEmerald = Color(0xFF10B981) // emerald-500
 val PoiseOrange = Color(0xFFFB923C) // orange-400
 
 // Gradients
@@ -38,7 +37,6 @@ val MetricValueGradient =
 
 // UI Elements
 val SetupCardBg = Color(0xFF171717).copy(alpha = 0.8f) // neutral-900/80
-val MetricsCardBg = Color(0xFF0F172A).copy(alpha = 0.9f) // slate-900/90
 
 val PoiseColorScheme =
         darkColorScheme(

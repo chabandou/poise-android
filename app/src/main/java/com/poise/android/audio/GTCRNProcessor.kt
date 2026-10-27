@@ -4,6 +4,9 @@ import ai.onnxruntime.*
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
 
 /**
  * GTCRN (Gated Temporal Convolutional Recurrent Network) processor for speech denoising.
@@ -49,15 +52,16 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     private var ortSession: OrtSession? = null
     private var ortEnv: OrtEnvironment? = null
 
+    // Model inputs live in direct buffers, which ONNX Runtime reads in place. So the input tensors
+    // are created once and each frame only rewrites these buffers. (MUST be before init block)
+    private val mixInput = directFloats(NUM_BINS * 2)
     // State caches (persisted between frames)
-    private var convCache = FloatArray(CONV_CACHE_SIZE) { 0f }
-    private var traCache = FloatArray(TRA_CACHE_SIZE) { 0f }
-    private var interCache = FloatArray(INTER_CACHE_SIZE) { 0f }
+    private val convCache = directFloats(CONV_CACHE_SIZE)
+    private val traCache = directFloats(TRA_CACHE_SIZE)
+    private val interCache = directFloats(INTER_CACHE_SIZE)
+    private var inputs: Map<String, OnnxTensor> = emptyMap()
 
-    // Pre-allocated buffers to avoid per-frame allocations (MUST be before init block)
-    private val mixInputBuffer = FloatArray(514)
-    private val stftOutputBuffer = FloatArray(514)
-    private val enhArrayBuffer = FloatArray(514)
+    private val stftOutputBuffer = FloatArray(NUM_BINS * 2)
 
     // VAD
     private var vadThresholdLinear = Math.pow(10.0, vadThresholdDb / 20.0).toFloat()
@@ -65,10 +69,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     private val hangFrames = ((300.0 * SAMPLE_RATE / 1000) / FRAME_SIZE).toInt() // 300ms hang time
 
     // Statistics
-    private var frameCount = 0
-    private var totalInferenceTimeMs = 0.0
     private var smoothedInferenceTimeMs = 0.0 // EMA for live stats
-    private var vadBypassed = 0
 
     init {
         try {
@@ -126,13 +127,20 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                     }
                 }
 
-        ortSession = ortEnv?.createSession(modelBytes, sessionOptions)
+        val env = ortEnv!!
+        ortSession = env.createSession(modelBytes, sessionOptions)
+        inputs =
+                mapOf(
+                        "mix" to OnnxTensor.createTensor(env, mixInput, MIX_SHAPE),
+                        "conv_cache" to OnnxTensor.createTensor(env, convCache, CONV_SHAPE),
+                        "tra_cache" to OnnxTensor.createTensor(env, traCache, TRA_SHAPE),
+                        "inter_cache" to OnnxTensor.createTensor(env, interCache, INTER_SHAPE)
+                )
         Log.i(TAG, "GTCRN ONNX model loaded (${modelBytes.size / 1024} KB)")
     }
 
-    // Pre-allocated input/output name arrays
-    private val inputNames = arrayOf("mix", "conv_cache", "tra_cache", "inter_cache")
-    private val outputNames = arrayOf("enh", "conv_cache_out", "tra_cache_out", "inter_cache_out")
+    private fun directFloats(size: Int): FloatBuffer =
+            ByteBuffer.allocateDirect(size * Float.SIZE_BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer()
 
     /**
      * Process a single audio frame through the GTCRN pipeline.
@@ -159,8 +167,6 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         // VAD check: quiet frames skip only the model. They still go through STFT and iSTFT, so
         // the output delay and overlap-add state stay the same when sound comes back.
         val isActive = checkVAD(frame)
-        if (!isActive) vadBypassed++
-        frameCount++
 
         return try {
             // 1. Compute STFT (native) -> 514 floats (257 real + 257 imag)
@@ -175,7 +181,6 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                         val startTime = System.nanoTime()
                         val modelOutput = runOnnxInference()
                         val inferenceMs = (System.nanoTime() - startTime) / 1_000_000.0
-                        totalInferenceTimeMs += inferenceMs
 
                         // Update EMA (alpha = 0.1 means 10% weight to new sample)
                         if (smoothedInferenceTimeMs == 0.0) {
@@ -223,73 +228,30 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
 
     private fun prepareOnnxInput(stftResult: FloatArray) {
         // stftResult: [257 real, 257 imag] = 514 floats
-        // Reshape to [1, 257, 1, 2] in mixInputBuffer (reused)
+        // Reshape to [1, 257, 1, 2] in mixInput (reused)
         // The ONNX model expects: [batch, freq_bins, time_frames, real_imag]
         for (i in 0 until NUM_BINS) {
-            mixInputBuffer[i * 2] = stftResult[i] // real at even indices
-            mixInputBuffer[i * 2 + 1] = stftResult[i + NUM_BINS] // imag at odd indices
+            mixInput.put(i * 2, stftResult[i]) // real at even indices
+            mixInput.put(i * 2 + 1, stftResult[i + NUM_BINS]) // imag at odd indices
         }
     }
 
     private fun runOnnxInference(): FloatArray? {
-        val env = ortEnv ?: return null
         val session = ortSession ?: return null
 
         return try {
-            // Create input tensors (shapes are constant)
-            val mixTensor =
-                    OnnxTensor.createTensor(
-                            env,
-                            java.nio.FloatBuffer.wrap(mixInputBuffer),
-                            MIX_SHAPE
-                    )
-            val convTensor =
-                    OnnxTensor.createTensor(env, java.nio.FloatBuffer.wrap(convCache), CONV_SHAPE)
-            val traTensor =
-                    OnnxTensor.createTensor(env, java.nio.FloatBuffer.wrap(traCache), TRA_SHAPE)
-            val interTensor =
-                    OnnxTensor.createTensor(env, java.nio.FloatBuffer.wrap(interCache), INTER_SHAPE)
+            session.run(inputs).use { results ->
+                // Carry the model's state to the next frame
+                copyOutput(results, "conv_cache_out", convCache)
+                copyOutput(results, "tra_cache_out", traCache)
+                copyOutput(results, "inter_cache_out", interCache)
 
-            // Use pre-allocated map for inputs (avoid map creation each frame)
-            val inputs =
-                    mapOf(
-                            "mix" to mixTensor,
-                            "conv_cache" to convTensor,
-                            "tra_cache" to traTensor,
-                            "inter_cache" to interTensor
-                    )
-
-            val results = session.run(inputs)
-
-            // Get outputs - rewind buffers before reading
-            val enhOutput = (results.get("enh").get() as OnnxTensor).floatBuffer
-            val convCacheOut = (results.get("conv_cache_out").get() as OnnxTensor).floatBuffer
-            val traCacheOut = (results.get("tra_cache_out").get() as OnnxTensor).floatBuffer
-            val interCacheOut = (results.get("inter_cache_out").get() as OnnxTensor).floatBuffer
-
-            // Update state caches for next frame (reuse existing arrays)
-            convCacheOut.rewind()
-            convCacheOut.get(convCache)
-            traCacheOut.rewind()
-            traCacheOut.get(traCache)
-            interCacheOut.rewind()
-            interCacheOut.get(interCache)
-
-            // Extract enhanced STFT into pre-allocated buffer
-            enhOutput.rewind()
-            enhOutput.get(enhArrayBuffer)
-
-            // Close tensors
-            mixTensor.close()
-            convTensor.close()
-            traTensor.close()
-            interTensor.close()
-            results.close()
-
-            // Convert from [1, 257, 1, 2] back to [257 real, 257 imag] in pre-allocated buffer
-            for (i in 0 until NUM_BINS) {
-                stftOutputBuffer[i] = enhArrayBuffer[i * 2] // real
-                stftOutputBuffer[i + NUM_BINS] = enhArrayBuffer[i * 2 + 1] // imag
+                // Convert from [1, 257, 1, 2] back to [257 real, 257 imag] in pre-allocated buffer
+                val enh = (results.get("enh").get() as OnnxTensor).floatBuffer
+                for (i in 0 until NUM_BINS) {
+                    stftOutputBuffer[i] = enh.get(i * 2) // real
+                    stftOutputBuffer[i + NUM_BINS] = enh.get(i * 2 + 1) // imag
+                }
             }
             stftOutputBuffer
         } catch (e: Exception) {
@@ -298,10 +260,14 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         }
     }
 
+    private fun copyOutput(results: OrtSession.Result, name: String, target: FloatBuffer) {
+        target.clear()
+        target.put((results.get(name).get() as OnnxTensor).floatBuffer)
+        target.rewind()
+    }
+
     /** Get processing statistics. */
     fun getStats(): ProcessingStats {
-        val displayFrames = frameCount
-        val vadBypassRatio = if (frameCount > 0) vadBypassed.toFloat() / frameCount else 0f
         val rtf =
                 if (smoothedInferenceTimeMs > 0) {
                     val frameDurationMs = (FRAME_SIZE.toFloat() / SAMPLE_RATE) * 1000
@@ -311,34 +277,26 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                 }
 
         return ProcessingStats(
-                frameCount = displayFrames,
-                avgTimeMs =
-                        smoothedInferenceTimeMs, // Return smoothed current value instead of global
-                // avg
+                avgTimeMs = smoothedInferenceTimeMs, // smoothed current value, not a global average
                 rtf = rtf,
-                vadTotal = frameCount,
-                vadActive = frameCount - vadBypassed,
-                vadBypassed = vadBypassed,
-                vadBypassRatio = vadBypassRatio,
                 isVadDetected = framesSinceActive < hangFrames // Active if within hang time
         )
     }
 
     /** Reset processor state. */
     fun reset() {
-        convCache.fill(0f)
-        traCache.fill(0f)
-        interCache.fill(0f)
+        for (cache in listOf(convCache, traCache, interCache)) {
+            for (i in 0 until cache.capacity()) cache.put(i, 0f)
+        }
         nativeSTFTReset(stftHandle)
-        frameCount = 0
-        totalInferenceTimeMs = 0.0
         smoothedInferenceTimeMs = 0.0
-        vadBypassed = 0
         framesSinceActive = hangFrames + 1
         Log.i(TAG, "GTCRNProcessor reset")
     }
 
     override fun close() {
+        inputs.values.forEach { it.close() }
+        inputs = emptyMap()
         ortSession?.close()
         ortSession = null
         ortEnv?.close()

@@ -10,68 +10,34 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Model selection for audio processing. */
-enum class ProcessorModel {
-    GTCRN, // Lightweight (0.34MB), faster, spectrogram-based
-    LEGACY // DeepFilterNet (~10MB), slower, waveform-based
-}
-
 /**
  * Audio pipeline that orchestrates:
  * 1. Capturing system audio via AudioPlaybackCapture
- * 2. Processing through GTCRN or legacy processor
+ * 2. Denoising through GTCRN
  * 3. Playing back enhanced audio via AudioTrack
  */
-class AudioPipeline(
-        private val context: Context,
-        private val model: ProcessorModel = ProcessorModel.GTCRN
-) {
+class AudioPipeline(private val context: Context) {
     companion object {
         private const val TAG = "AudioPipeline"
-        private const val SAMPLE_RATE = 48000
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_FLOAT
 
-        // Frame sizes for each model
-        private const val LEGACY_FRAME_SIZE = 480 // 10ms at 48kHz
-        private const val GTCRN_FRAME_SIZE = 256 // 16ms at 16kHz
+        // GTCRN runs at 16kHz; Android resamples capture and playback for us (with proper filtering)
+        private const val SAMPLE_RATE = GTCRNProcessor.SAMPLE_RATE
+        private const val FRAME_SIZE = GTCRNProcessor.FRAME_SIZE // 16ms at 16kHz
+
+        // At least 40 ms of float samples
+        private const val MIN_BUFFER_BYTES = SAMPLE_RATE / 25 * Float.SIZE_BYTES
     }
-
-    // Frame size depends on model
-    private val frameSize: Int
-        get() =
-                when (model) {
-                    ProcessorModel.GTCRN -> GTCRN_FRAME_SIZE
-                    ProcessorModel.LEGACY -> LEGACY_FRAME_SIZE
-                }
-
-    // GTCRN runs at 16kHz; Android resamples capture and playback for us (with proper filtering)
-    private val sampleRate: Int
-        get() =
-                when (model) {
-                    ProcessorModel.GTCRN -> GTCRNProcessor.SAMPLE_RATE
-                    ProcessorModel.LEGACY -> SAMPLE_RATE
-                }
-
-    // At least 40 ms of float samples, whatever the rate
-    private val minBufferBytes: Int
-        get() = sampleRate / 25 * Float.SIZE_BYTES
 
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
-    private var legacyProcessor: PoiseProcessor? = null
     private var gtcrnProcessor: GTCRNProcessor? = null
     private var processingJob: Job? = null
     private var mediaProjection: MediaProjection? = null
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
-
-    private val _stats = MutableStateFlow<ProcessingStats?>(null)
-    val stats: StateFlow<ProcessingStats?> = _stats.asStateFlow()
-
-    private val _latestRtf = MutableStateFlow(0f)
-    val latestRtf: StateFlow<Float> = _latestRtf.asStateFlow()
 
     /**
      * Start audio capture and processing on a background job. Call [start] and [stop] from the main
@@ -94,21 +60,7 @@ class AudioPipeline(
         processingJob =
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        // Initialize processor based on model selection
-                        when (model) {
-                            ProcessorModel.GTCRN -> {
-                                gtcrnProcessor = GTCRNProcessor(context)
-                                Log.i(TAG, "Using GTCRN model (fast, 0.34MB)")
-                            }
-                            ProcessorModel.LEGACY -> {
-                                legacyProcessor =
-                                        PoiseProcessor(context).also {
-                                            it.setupInputResampler(SAMPLE_RATE)
-                                            it.setupOutputResampler(SAMPLE_RATE)
-                                        }
-                                Log.i(TAG, "Using legacy model (slower, ~10MB)")
-                            }
-                        }
+                        gtcrnProcessor = GTCRNProcessor(context)
 
                         // Setup audio capture
                         setupAudioCapture(projection)
@@ -144,13 +96,13 @@ class AudioPipeline(
         val audioFormat =
                 AudioFormat.Builder()
                         .setEncoding(AUDIO_FORMAT)
-                        .setSampleRate(sampleRate)
+                        .setSampleRate(SAMPLE_RATE)
                         .setChannelMask(CHANNEL_CONFIG)
                         .build()
 
         // Calculate buffer size
-        val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, CHANNEL_CONFIG, AUDIO_FORMAT)
-        val bufferSize = maxOf(minBufferSize, minBufferBytes)
+        val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+        val bufferSize = maxOf(minBufferSize, MIN_BUFFER_BYTES)
 
         // Create AudioRecord with playback capture
         audioRecord =
@@ -165,7 +117,7 @@ class AudioPipeline(
         }
 
         audioRecord?.startRecording()
-        Log.i(TAG, "AudioRecord started: $sampleRate Hz, buffer=$bufferSize bytes")
+        Log.i(TAG, "AudioRecord started: $SAMPLE_RATE Hz, buffer=$bufferSize bytes")
     }
 
     private fun setupAudioOutput() {
@@ -181,13 +133,13 @@ class AudioPipeline(
         val audioFormat =
                 AudioFormat.Builder()
                         .setEncoding(AUDIO_FORMAT)
-                        .setSampleRate(sampleRate)
+                        .setSampleRate(SAMPLE_RATE)
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .build()
 
         val minBufferSize =
-                AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AUDIO_FORMAT)
-        val bufferSize = maxOf(minBufferSize, minBufferBytes)
+                AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AUDIO_FORMAT)
+        val bufferSize = maxOf(minBufferSize, MIN_BUFFER_BYTES)
 
         audioTrack =
                 AudioTrack.Builder()
@@ -199,12 +151,12 @@ class AudioPipeline(
                         .build()
 
         audioTrack?.play()
-        Log.i(TAG, "AudioTrack started: $sampleRate Hz, low-latency mode")
+        Log.i(TAG, "AudioTrack started: $SAMPLE_RATE Hz, low-latency mode")
     }
 
     private suspend fun processAudioLoop() {
         // Capture already runs at the model's rate, so one read is one model frame
-        val readSize = frameSize
+        val readSize = FRAME_SIZE
         val inputBuffer = FloatArray(readSize)
         var statsUpdateCounter = 0
 
@@ -225,12 +177,7 @@ class AudioPipeline(
                     continue // Not enough samples
                 }
 
-                // Process based on model
-                val outputAudio =
-                        when (model) {
-                            ProcessorModel.GTCRN -> gtcrnProcessor?.processFrame(inputBuffer)
-                            ProcessorModel.LEGACY -> legacyProcessor?.processFrame(inputBuffer)
-                        }
+                val outputAudio = gtcrnProcessor?.processFrame(inputBuffer)
 
                 if (outputAudio != null && outputAudio.isNotEmpty()) {
                     // Apply output volume from UI slider
@@ -246,16 +193,7 @@ class AudioPipeline(
                 statsUpdateCounter++
                 if (statsUpdateCounter >= 10) {
                     statsUpdateCounter = 0
-                    val stats =
-                            when (model) {
-                                ProcessorModel.GTCRN -> gtcrnProcessor?.getStats()
-                                ProcessorModel.LEGACY -> legacyProcessor?.getStats()
-                            }
-                    stats?.let {
-                        _stats.value = it
-                        _latestRtf.value = it.rtf
-                        AudioServiceState.updateStats(it)
-                    }
+                    gtcrnProcessor?.getStats()?.let { AudioServiceState.updateStats(it) }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Processing error: ${e.message}")
@@ -288,17 +226,6 @@ class AudioPipeline(
         gtcrnProcessor?.close()
         gtcrnProcessor = null
 
-        legacyProcessor?.close()
-        legacyProcessor = null
-
         Log.i(TAG, "Audio pipeline stopped")
-    }
-
-    /** Reset processor state (clears ONNX model state). */
-    fun resetProcessor() {
-        when (model) {
-            ProcessorModel.GTCRN -> gtcrnProcessor?.reset()
-            ProcessorModel.LEGACY -> legacyProcessor?.reset()
-        }
     }
 }

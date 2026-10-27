@@ -16,9 +16,6 @@ object AudioServiceState {
     private val _stats = MutableStateFlow<ProcessingStats?>(null)
     val stats: StateFlow<ProcessingStats?> = _stats.asStateFlow()
 
-    private val _rtf = MutableStateFlow(0f)
-    val rtf: StateFlow<Float> = _rtf.asStateFlow()
-
     private val _isStarting = MutableStateFlow(false)
     val isStarting: StateFlow<Boolean> = _isStarting.asStateFlow()
 
@@ -43,13 +40,11 @@ object AudioServiceState {
 
     fun updateStats(newStats: ProcessingStats?) {
         _stats.value = newStats
-        newStats?.let { _rtf.value = it.rtf }
     }
 
     fun reset() {
         _isRunning.value = false
         _isStarting.value = false
         _stats.value = null
-        _rtf.value = 0f
     }
 }

@@ -18,9 +18,9 @@ import androidx.core.app.NotificationCompat
 import com.poise.android.MainActivity
 import com.poise.android.R
 import com.poise.android.audio.AudioPipeline
-import com.poise.android.audio.ProcessingStats
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 
 /**
@@ -41,12 +41,6 @@ class AudioCaptureService : Service() {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         private const val VOLUME_STEP = 0.1f // 10% per tap
-
-        private var instance: AudioCaptureService? = null
-
-        fun getStats(): StateFlow<ProcessingStats?>? = instance?.audioPipeline?.stats
-        fun getIsRunning(): StateFlow<Boolean>? = instance?.audioPipeline?.isRunning
-        fun getRtf(): StateFlow<Float>? = instance?.audioPipeline?.latestRtf
     }
 
     private var audioPipeline: AudioPipeline? = null
@@ -55,10 +49,10 @@ class AudioCaptureService : Service() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private var originalMusicVolume: Int? = null // null = we have not muted anything
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var notificationJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
-        instance = this
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         createNotificationChannel()
         Log.i(TAG, "Service created")
@@ -98,12 +92,10 @@ class AudioCaptureService : Service() {
             ACTION_VOLUME_UP -> {
                 val current = AudioServiceState.outputVolume.value
                 AudioServiceState.setOutputVolume(current + VOLUME_STEP)
-                updateNotification()
             }
             ACTION_VOLUME_DOWN -> {
                 val current = AudioServiceState.outputVolume.value
                 AudioServiceState.setOutputVolume(current - VOLUME_STEP)
-                updateNotification()
             }
         }
         return START_NOT_STICKY
@@ -121,6 +113,16 @@ class AudioCaptureService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+
+        // Keep the notification's volume in step with the in-app slider and the +/- buttons.
+        // collectLatest + delay: a slider drag posts only its final value.
+        notificationJob =
+                serviceScope.launch(Dispatchers.Main) {
+                    AudioServiceState.outputVolume.drop(1).collectLatest {
+                        delay(250)
+                        updateNotification()
+                    }
+                }
 
         // Get MediaProjection
         val projectionManager =
@@ -198,6 +200,10 @@ class AudioCaptureService : Service() {
         // Stop projection
         mediaProjection?.stop()
         mediaProjection = null
+
+        // Stop updating the notification before it is removed
+        notificationJob?.cancel()
+        notificationJob = null
 
         // Stop service
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -354,7 +360,6 @@ class AudioCaptureService : Service() {
     override fun onDestroy() {
         stopCapture()
         serviceScope.cancel()
-        instance = null
         super.onDestroy()
         Log.i(TAG, "Service destroyed")
     }
