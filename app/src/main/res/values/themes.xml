@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- One per palette in ui/theme/Color.kt, painted with its bg: the window is that colour from
+         its first frame, so the app opens straight into it. Halcyon is the default, shown while
+         starting before Android 13; from 13 the launch screen takes the theme last chosen. -->
     <style name="Theme.PoiseAndroid" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">#0A111E</item>
+    </style>
+    <style name="Theme.PoiseAndroid.Verdant">
+        <item name="android:windowBackground">#0A1110</item>
+    </style>
+    <style name="Theme.PoiseAndroid.Vigil">
+        <item name="android:windowBackground">#0A0920</item>
+    </style>
+    <style name="Theme.PoiseAndroid.Ember">
+        <item name="android:windowBackground">#140F0A</item>
+    </style>
+    <style name="Theme.PoiseAndroid.Eclipse">
+        <item name="android:windowBackground">#0A0A0A</item>
     </style>
 </resources>

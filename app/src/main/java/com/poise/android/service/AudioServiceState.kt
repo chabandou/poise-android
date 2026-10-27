@@ -27,8 +27,18 @@ object AudioServiceState {
         PoiseSettings.saveVolume(_outputVolume.value) // remembered for the next launch
     }
 
+    // Why the last session ended, when it ended by itself; cleared by the next start
+    private val _stopNote = MutableStateFlow<String?>(null)
+    val stopNote: StateFlow<String?> = _stopNote.asStateFlow()
+
     fun setActive(active: Boolean) {
         _isActive.value = active
+        if (active) _stopNote.value = null
+    }
+
+    /** Records why the session is ending. The first reason wins: the rest follow from it. */
+    fun noteStop(why: String) {
+        if (_stopNote.value == null) _stopNote.value = why
     }
 
     fun updateStats(newStats: ProcessingStats?) {

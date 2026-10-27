@@ -26,7 +26,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
@@ -40,8 +43,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -66,19 +67,24 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +95,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.poise.android.audio.ProcessingStats
+import com.poise.android.service.AudioServiceState
 import com.poise.android.service.PoiseSettings
 import com.poise.android.ui.theme.LocalPalette
 import com.poise.android.ui.theme.crossfade
@@ -192,6 +199,9 @@ fun MainScreen(
 }
 
 private const val STEADY_EXTRA_MS = 33L // two skipped frames at 60 Hz
+
+private val SLIDER_TICK_GAP = 9.dp
+private val SLIDER_GIVE = 14.dp // how far the diamond can be pulled past an end, at most
 
 // The nav highlight and the theme ring glide by spring, so a tap mid-glide turns them without
 // a stop, and they sink with their speed: low on the way, full height as they settle
@@ -471,14 +481,30 @@ private fun ColumnScope.HomePage(
             }
         }
 
-        Row(Modifier.fillMaxWidth().height(62.dp).panel()) {
-            val cell = Modifier.weight(1f).fillMaxHeight()
-            val voice = stats?.isVadDetected == true
-            StatCell("Load", stats?.let { "${(it.rtf * 100).roundToInt()}%" }, pal.ink, cell) // the model's share of each frame
-            Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
-            StatCell("Frame", stats?.let { "%.1f ms".format(it.avgTimeMs) }, pal.ink, cell)
-            Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
-            StatCell("Voice", stats?.let { if (voice) "Yes" else "Quiet" }, if (voice) pal.secondary else pal.muted, cell, roll = true)
+        // After a session that ended by itself, the idle stats give their place to the reason
+        val stopNote by AudioServiceState.stopNote.collectAsState()
+        AnimatedContent(
+                stopNote.takeIf { phase == Phase.Idle },
+                Modifier.fillMaxWidth().height(62.dp).panel(),
+                transitionSpec = {
+                    (slideInVertically(tween(paced(380), easing = FastOutSlowInEasing)) { it / 2 } + fadeIn(tween(paced(300)))) togetherWith
+                            (slideOutVertically(tween(paced(380), easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(paced(200))))
+                },
+                label = "statsOrNote"
+        ) { note ->
+            Row(Modifier.fillMaxSize()) {
+                val cell = Modifier.weight(1f).fillMaxHeight()
+                if (note != null) {
+                    StatCell("Stopped", note, pal.secondary, cell)
+                } else {
+                    val voice = stats?.isVadDetected == true
+                    StatCell("Load", stats?.let { "${(it.rtf * 100).roundToInt()}%" }, pal.ink, cell) // the model's share of each frame
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
+                    StatCell("Frame", stats?.let { "%.1f ms".format(it.avgTimeMs) }, pal.ink, cell)
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
+                    StatCell("Voice", stats?.let { if (voice) "Yes" else "Quiet" }, if (voice) pal.secondary else pal.muted, cell, roll = true)
+                }
+            }
         }
     }
 }
@@ -579,10 +605,32 @@ private fun SliderCard(
 ) {
     val pal = LocalPalette.current
     val buzz = rememberBuzz()
+    val scope = rememberCoroutineScope()
     val source = remember { MutableInteractionSource() }
-    val held = source.collectIsPressedAsState().value || source.collectIsDraggedAsState().value
+    var pressed by remember { mutableStateOf(false) }
+    val dragged by source.collectIsDraggedAsState() // read first: behind || it would miss the drag's start
+    val held = pressed || dragged
     val turn by animateFloatAsState(if (held) 45f else 0f, spring(dampingRatio = 0.5f, stiffness = 500f), label = "thumb")
     val grow by animateFloatAsState(if (held) 1.25f else 1f, spring(dampingRatio = 0.5f, stiffness = 500f), label = "thumbSize")
+    val lift by animateFloatAsState(if (held) 1f else 0f, spring(stiffness = 500f), label = "rulerLift")
+    val stretch = remember { Animatable(0f) } // px past either end, rubber-banded
+    val current by rememberUpdatedState(position)
+    val change by rememberUpdatedState(onChange)
+    val track = remember { floatArrayOf(0f, 1f) } // the thumb's travel in px, set as it draws
+    var dragX by remember { mutableFloatStateOf(0f) }
+    val give = with(LocalDensity.current) { SLIDER_GIVE.toPx() }
+    fun moveTo(x: Float) {
+        val (from, to) = track
+        val f = (x - from) / (to - from)
+        val past = x - x.coerceIn(from, to)
+        scope.launch { stretch.snapTo(give * past / (abs(past) + give * 4f)) }
+        val v = range.start + (range.endInclusive - range.start) * f.coerceIn(0f, 1f)
+        if (v != current) {
+            if (v == range.start || v == range.endInclusive) buzz(Buzz.Edge)
+            change(v)
+        }
+    }
+    fun letGo() = scope.launch { stretch.animateTo(0f, spring(dampingRatio = 0.35f, stiffness = 420f)) }
     var last by remember { mutableIntStateOf(number) }
     val up = number >= last
     LaunchedEffect(number) {
@@ -598,21 +646,54 @@ private fun SliderCard(
             }
             RollDigits("$number $unit", TextStyle(color = pal.accent, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 22.sp), up)
         }
-        Slider(
-                value = position,
-                onValueChange = { v ->
-                    onChange(v)
-                    val atEnd = v <= range.start || v >= range.endInclusive
-                    if (atEnd && position != v) buzz(Buzz.Edge)
-                },
-                valueRange = range,
-                modifier = Modifier.fillMaxWidth().height(36.dp).semantics { contentDescription = title },
-                colors = SliderDefaults.colors(activeTrackColor = pal.accent, inactiveTrackColor = pal.line),
-                interactionSource = source,
-                thumb = {
-                    Box(Modifier.size(16.dp).graphicsLayer { rotationZ = turn; scaleX = grow; scaleY = grow }.background(pal.secondary, RoundedCornerShape(3.dp)))
-                }
-        )
+        // A ruler lit up to the value, with the gold diamond riding on it. Drag or tap anywhere; the
+        // ticks swell around the diamond, more while held, and past either end it gives a little
+        Canvas(
+                Modifier.fillMaxWidth()
+                        .height(40.dp)
+                        .semantics {
+                            contentDescription = title
+                            progressBarRangeInfo = ProgressBarRangeInfo(position, range)
+                            setProgress { change(it.coerceIn(range)); true }
+                        }
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                    onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                                    onTap = { moveTo(it.x) }
+                            )
+                        }
+                        .draggable(
+                                rememberDraggableState { dragX += it; moveTo(dragX) },
+                                Orientation.Horizontal,
+                                interactionSource = source,
+                                onDragStarted = { dragX = it.x; moveTo(it.x) },
+                                onDragStopped = { letGo() }
+                        )
+        ) {
+            val inset = 8.dp.toPx()
+            val from = inset
+            val to = size.width - inset
+            track[0] = from
+            track[1] = to
+            val f = (position - range.start) / (range.endInclusive - range.start)
+            val thumbX = from + f * (to - from) + stretch.value
+            val cy = size.height / 2f
+            val n = ((to - from) / SLIDER_TICK_GAP.toPx()).toInt()
+            val step = (to - from) / n
+            val reach = 28.dp.toPx()
+            for (i in 0..n) {
+                val x = from + i * step
+                // Lit up to the diamond, with one tick's width of blend so the edge glides
+                val lit = ((thumbX - x) / step + 0.5f).coerceIn(0f, 1f)
+                val near = (1f - abs(x - thumbX) / reach).coerceAtLeast(0f)
+                val h = 5.dp.toPx() * (1f + (0.35f + 0.5f * lift) * near * near)
+                drawLine(lerp(pal.tick, pal.accent, lit), Offset(x, cy - h), Offset(x, cy + h), 2.dp.toPx(), StrokeCap.Round)
+            }
+            val side = 16.dp.toPx() * grow
+            rotate(turn, Offset(thumbX, cy)) {
+                drawRoundRect(pal.secondary, Offset(thumbX - side / 2, cy - side / 2), Size(side, side), CornerRadius(3.dp.toPx()))
+            }
+        }
         Row {
             Text(ends.first, color = pal.muted, fontSize = 12.sp)
             Spacer(Modifier.weight(1f))

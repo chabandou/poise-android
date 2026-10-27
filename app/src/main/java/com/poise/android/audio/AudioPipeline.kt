@@ -203,6 +203,7 @@ class AudioPipeline(private val context: Context) {
                 if (readResult < 0) {
                     // Errors here do not clear (e.g. dead capture); retrying would spin the CPU
                     Log.e(TAG, "AudioRecord read error: $readResult, stopping")
+                    AudioServiceState.noteStop("Capture failed")
                     break
                 }
 
@@ -235,6 +236,7 @@ class AudioPipeline(private val context: Context) {
                     val quietFrames = gtcrnProcessor?.framesSinceActive ?: 0
                     if (autoStopMinutes > 0 && quietFrames >= autoStopMinutes * 60 * SAMPLE_RATE / FRAME_SIZE) {
                         Log.i(TAG, "Nothing played for $autoStopMinutes min, stopping")
+                        AudioServiceState.noteStop(if (autoStopMinutes == 60) "Silent for 1 hour" else "Silent for $autoStopMinutes min")
                         break
                     }
 

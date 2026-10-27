@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Icon
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
@@ -22,6 +23,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.poise.android.service.AudioCaptureService
@@ -41,6 +43,16 @@ class MainActivity : ComponentActivity() {
     companion object {
         // Sent by the Quick Settings tile to start a session
         const val ACTION_START = "com.poise.android.START_FROM_TILE"
+
+        // The window theme for each palette, in Palettes order (res/values/themes.xml)
+        private val WINDOW_THEMES =
+                intArrayOf(
+                        R.style.Theme_PoiseAndroid,
+                        R.style.Theme_PoiseAndroid_Verdant,
+                        R.style.Theme_PoiseAndroid_Vigil,
+                        R.style.Theme_PoiseAndroid_Ember,
+                        R.style.Theme_PoiseAndroid_Eclipse
+                )
     }
 
     private var pendingStart = false
@@ -76,6 +88,8 @@ class MainActivity : ComponentActivity() {
             }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        PoiseSettings.init(this)
+        setTheme(WINDOW_THEMES.getOrElse(PoiseSettings.theme.value) { WINDOW_THEMES[0] })
         enableEdgeToEdge(
                 statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
                 navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT)
@@ -86,12 +100,19 @@ class MainActivity : ComponentActivity() {
             AudioCaptureService.restoreSystemAudio(this)
         }
 
-        PoiseSettings.init(this)
         val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: ""
 
         setContent {
             val theme by PoiseSettings.theme.collectAsState()
-            PoiseAndroidTheme(Palettes.getOrElse(theme) { Palettes[0] }) {
+            val palette = Palettes.getOrElse(theme) { Palettes[0] }
+            LaunchedEffect(theme) {
+                window.setBackgroundDrawable(ColorDrawable(palette.bg.toArgb()))
+                // Android 13+ remembers it for the launch screen, so the next start opens in this theme
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    splashScreen.setSplashScreenTheme(WINDOW_THEMES.getOrElse(theme) { WINDOW_THEMES[0] })
+                }
+            }
+            PoiseAndroidTheme(palette) {
                 // Use shared state that persists across service lifecycle
                 val isActive by AudioServiceState.isActive.collectAsState()
                 // Read twice a second: each change redraws the window, and the numbers can't be read faster

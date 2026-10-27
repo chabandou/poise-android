@@ -108,6 +108,7 @@ class AudioCaptureService : Service() {
                 override fun onReceive(context: Context, intent: Intent) {
                     if (!PoiseSettings.stopOnUnplug.value || audioPipeline == null) return
                     Log.i(TAG, "Headphones disconnected, stopping")
+                    AudioServiceState.noteStop("Headphones unplugged")
                     stopCapture()
                 }
             }
@@ -203,6 +204,7 @@ class AudioCaptureService : Service() {
                     override fun onStop() {
                         if (audioPipeline != null) {
                             Log.i(TAG, "Projection stopped by the system")
+                            AudioServiceState.noteStop("Sharing ended")
                             stopCapture()
                         }
                     }
@@ -236,6 +238,7 @@ class AudioCaptureService : Service() {
                 pipeline.isRunning.first { !it }
                 if (audioPipeline === pipeline) {
                     Log.w(TAG, "Pipeline ended on its own")
+                    AudioServiceState.noteStop("Capture ended")
                     stopCapture()
                 }
             } catch (e: CancellationException) {
