@@ -33,6 +33,7 @@ class AudioPipeline(private val context: Context) {
         private const val MIN_BUFFER_BYTES = SAMPLE_RATE / 25 * Float.SIZE_BYTES
 
         private const val HEALTH_LOG_FRAMES = SAMPLE_RATE * 5 / FRAME_SIZE // every ~5 s
+        private const val WARMUP_FRAMES = SAMPLE_RATE // the first second of output, while capture starts
     }
 
     private var audioRecord: AudioRecord? = null
@@ -173,6 +174,9 @@ class AudioPipeline(private val context: Context) {
         // Blocking writes keep the track's buffer full, so its whole size is delay. Start at two
         // frames and let the loop grow it only when the speaker actually runs dry.
         audioTrack?.bufferSizeInFrames = 2 * FRAME_SIZE
+        // Filled with silence before it plays rather than starting empty (on the Galaxy S9+ the
+        // delay then measured about 30 ms lower at the same buffer size)
+        audioTrack?.let { it.write(FloatArray(it.bufferSizeInFrames), 0, it.bufferSizeInFrames, AudioTrack.WRITE_BLOCKING) }
         audioTrack?.play()
         Log.i(TAG, "AudioTrack started: $SAMPLE_RATE Hz, low-latency mode")
     }
@@ -186,6 +190,7 @@ class AudioPipeline(private val context: Context) {
         var statsUpdateCounter = 0
         var healthLogCounter = 0
         var underruns = 0
+        var warmupUnderruns = 0
         // Frames taken from capture (read, skipped or lost) and frames handed to the speaker
         var framesRead = 0L
         var framesWritten = 0L
@@ -240,9 +245,14 @@ class AudioPipeline(private val context: Context) {
                         break
                     }
 
-                    // Each underrun is a click: give the track one more frame of headroom
+                    // Each underrun is a click: give the track one more frame of headroom. Not while
+                    // capture is still starting, though: the track runs dry then on silence
+                    // nobody hears, and growing it for that only adds delay
                     audioTrack?.let { track ->
-                        if (track.underrunCount > underruns) {
+                        if (framesWritten < WARMUP_FRAMES) {
+                            underruns = track.underrunCount
+                            warmupUnderruns = underruns
+                        } else if (track.underrunCount > underruns) {
                             underruns = track.underrunCount
                             val before = track.bufferSizeInFrames
                             // Capped at the track's capacity; past that, more underruns change nothing
@@ -277,7 +287,7 @@ class AudioPipeline(private val context: Context) {
 
                 if (++healthLogCounter >= HEALTH_LOG_FRAMES) {
                     healthLogCounter = 0
-                    logHealth(framesRead, framesWritten, lostFrames, skippedFrames)
+                    logHealth(framesRead, framesWritten, lostFrames, skippedFrames, warmupUnderruns)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Processing error: ${e.message}")
@@ -301,16 +311,17 @@ class AudioPipeline(private val context: Context) {
     }
 
     /**
-     * Logs what the listener hears. Underruns: the speaker ran out of audio (a click). Lost and
+     * Logs what the listener hears. Underruns: the speaker ran out of audio (a click), leaving out
+     * the [warmupUnderruns] on silence while capture started. Lost and
      * skipped: input dropped by Android or by us to catch up (a short jump). Delay: from capture
      * to speaker; it leaves out the playing app's own path to the capture point.
      */
-    private fun logHealth(framesRead: Long, framesWritten: Long, lostFrames: Long, skippedFrames: Long) {
+    private fun logHealth(framesRead: Long, framesWritten: Long, lostFrames: Long, skippedFrames: Long, warmupUnderruns: Int) {
         val track = audioTrack ?: return
         val record = audioRecord ?: return
         val played = AudioTimestamp()
         val captured = capturedFrames(record, AudioTimestamp())
-        val drops = "underruns=${track.underrunCount} lost=${ms(lostFrames)} ms skipped=${ms(skippedFrames)} ms"
+        val drops = "underruns=${track.underrunCount - warmupUnderruns} lost=${ms(lostFrames)} ms skipped=${ms(skippedFrames)} ms"
         if (captured == null || !track.getTimestamp(played)) {
             Log.i(TAG, "Health: $drops")
             return
