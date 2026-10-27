@@ -567,8 +567,12 @@ internal fun Dial(
                                     val target = if (inDisc(p)) press else touch
                                     if (target === touch) touchAngle = angleOf(p, c)
                                     scope.launch { target.animateTo(1f, tween(110, easing = EASE_OUT_CUBIC)) }
-                                    tryAwaitRelease()
-                                    scope.launch { target.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 500f)) }
+                                    val tapped = tryAwaitRelease() // false when it became a drag
+                                    scope.launch {
+                                        // A quick tap still sinks all the way before springing back
+                                        if (tapped) target.animateTo(1f, tween((110 * (1f - target.value)).roundToInt(), easing = EASE_OUT_CUBIC))
+                                        target.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 500f))
+                                    }
                                 },
                                 onTap = { p ->
                                     if (inDisc(p)) toggle() else setVolume(volumeAt(angleOf(p, c), current).first)

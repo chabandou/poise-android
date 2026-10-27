@@ -43,6 +43,12 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // Release code signed with the debug key: installs over the debug build to measure what users get
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {

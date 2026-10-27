@@ -8,6 +8,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -27,6 +29,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -91,10 +94,11 @@ import com.poise.android.ui.theme.LocalPalette
 import com.poise.android.ui.theme.crossfade
 import com.poise.android.ui.theme.Palettes
 import com.poise.android.ui.theme.Rajdhani
-import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 
 /** What Android allows Poise to do, read again each time the app comes back. */
@@ -189,6 +193,13 @@ fun MainScreen(
 
 private const val STEADY_EXTRA_MS = 33L // two skipped frames at 60 Hz
 
+// The nav highlight and the theme ring glide by spring, so a tap mid-glide turns them without
+// a stop, and they sink with their speed: low on the way, full height as they settle
+private val GLIDE = spring<Float>(dampingRatio = 0.85f, stiffness = 140f)
+private const val GLIDE_DIP_SPEED = 4f // slots a second, where the dip is deepest
+
+private fun glideDip(velocity: Float) = (abs(velocity) / GLIDE_DIP_SPEED).coerceAtMost(1f)
+
 @Composable
 internal fun rememberResumed(): Boolean {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -271,14 +282,48 @@ private fun Modifier.panel(radius: Dp = 20.dp) = composed {
     clip(shape).background(pal.panel).border(1.dp, pal.line, shape)
 }
 
-/** Sinks a little while pressed and springs back. */
-private fun Modifier.pressScale(source: InteractionSource, by: Float = 0.96f) = composed {
-    val pressed by source.collectIsPressedAsState()
-    val s by animateFloatAsState(if (pressed) by else 1f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "press")
+private const val PRESS_IN_MS = 90
+
+/**
+ * How far [source] is pressed, from 0 to 1. A quick tap still goes all the way in before
+ * [release] brings it back, so every touch shows; a press that becomes a scroll just lets go.
+ */
+@Composable
+internal fun rememberPress(
+        source: InteractionSource,
+        release: AnimationSpec<Float> = spring(dampingRatio = 0.5f, stiffness = 600f)
+): Animatable<Float, AnimationVector1D> {
+    val press = remember { Animatable(0f) }
+    LaunchedEffect(source) {
+        source.interactions.filterIsInstance<PressInteraction>().collectLatest {
+            when (it) {
+                is PressInteraction.Press -> press.animateTo(1f, tween(PRESS_IN_MS))
+                is PressInteraction.Release -> {
+                    press.animateTo(1f, tween((PRESS_IN_MS * (1f - press.value)).roundToInt()))
+                    press.animateTo(0f, release)
+                }
+                is PressInteraction.Cancel -> press.animateTo(0f, tween(200))
+            }
+        }
+    }
+    return press
+}
+
+/** Sinks a little while pressed and springs back: the press feedback for buttons and cards. */
+internal fun Modifier.pressScale(source: InteractionSource, by: Float = 0.96f) = composed {
+    val press = rememberPress(source)
     graphicsLayer {
+        val s = 1f - (1f - by) * press.value
         scaleX = s
         scaleY = s
     }
+}
+
+/** Lights up while pressed and fades after: the press feedback for full-width rows. */
+private fun Modifier.pressWash(source: InteractionSource) = composed {
+    val pal = LocalPalette.current
+    val press = rememberPress(source, tween(320))
+    drawBehind { if (press.value > 0f) drawRect(pal.ink.copy(alpha = 0.05f * press.value)) }
 }
 
 @Composable
@@ -590,7 +635,7 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
     SettingRow(
             title,
             subtitle,
-            Modifier.toggleable(checked, source, indication = null, role = Role.Switch) {
+            Modifier.pressWash(source).toggleable(checked, source, indication = null, role = Role.Switch) {
                 buzz(if (it) Buzz.On else Buzz.Off)
                 onChange(it)
             },
@@ -677,8 +722,9 @@ private fun ColumnScope.SettingsPage(
         Caption("Session")
         Column(Modifier.panel()) {
             var choosing by remember { mutableStateOf(false) }
+            val source = remember { MutableInteractionSource() }
             Box {
-                SettingRow("Auto-stop", "After this long in silence", Modifier.clickable { buzz(Buzz.Tap); choosing = true }) {
+                SettingRow("Auto-stop", "After this long in silence", Modifier.pressWash(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }) {
                     RowValue(autoStopLabel(autoStop))
                 }
                 if (choosing) {
@@ -699,19 +745,14 @@ private fun ColumnScope.SettingsPage(
         // One gold ring glides from the old swatch to the new one, sinking a little on the way,
         // while the old colours dissolve into the new
         val ringAt = remember { Animatable(theme.toFloat()) }
-        var ringFrom by remember { mutableFloatStateOf(theme.toFloat()) }
-        LaunchedEffect(theme) {
-            ringFrom = ringAt.value
-            ringAt.animateTo(theme.toFloat(), tween(THEME_FADE_MS, easing = FastOutSlowInEasing)) // with the colours
-        }
+        LaunchedEffect(theme) { ringAt.animateTo(theme.toFloat(), GLIDE) }
         Row(
                 Modifier.drawWithContent {
                     drawContent()
                     val gap = 8.dp.toPx()
                     val n = Palettes.size
                     val slot = (size.width - (n - 1) * gap) / n
-                    val u = if (ringFrom == theme.toFloat()) 1f else ((ringAt.value - ringFrom) / (theme - ringFrom)).coerceIn(0f, 1f)
-                    val k = 1f - 0.12f * sin(PI.toFloat() * u)
+                    val k = 1f - 0.12f * glideDip(ringAt.velocity)
                     val w = 2.dp.toPx()
                     val r = 12.dp.toPx() * k
                     val ring = Size(slot * k - w, size.height * k - w)
@@ -885,11 +926,7 @@ private fun NavBar(page: Page, onSelect: (Page) -> Unit) {
     // One highlight glides from tab to tab, sinking lower on the way and rising as it arrives
     val target = page.ordinal.toFloat()
     val at = remember { Animatable(target) }
-    var from by remember { mutableFloatStateOf(target) }
-    LaunchedEffect(page) {
-        from = at.value
-        at.animateTo(target, tween(paced(320), easing = FastOutSlowInEasing))
-    }
+    LaunchedEffect(page) { at.animateTo(target, GLIDE) }
     Column(Modifier.fillMaxWidth().background(pal.bar)) {
         RowDivider()
         Row(
@@ -901,8 +938,7 @@ private fun NavBar(page: Page, onSelect: (Page) -> Unit) {
                             val gap = 8.dp.toPx()
                             val n = Page.values().size
                             val slot = (size.width - 2 * pad - (n - 1) * gap) / n
-                            val u = if (target == from) 1f else ((at.value - from) / (target - from)).coerceIn(0f, 1f)
-                            val h = size.height * (1f - 0.4f * sin(PI.toFloat() * u))
+                            val h = size.height * (1f - 0.4f * glideDip(at.velocity))
                             drawRect(
                                     Brush.verticalGradient(listOf(Color.Transparent, pal.accentWash), startY = size.height - h, endY = size.height),
                                     Offset(pad + at.value * (slot + gap), size.height - h),

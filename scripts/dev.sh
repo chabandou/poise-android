@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dev loop on a USB-connected phone. Usage: scripts/dev.sh <build|install|test|start|play [file]|stop|metrics|logs|check|smoke>
+# Dev loop on a USB-connected phone. Usage: scripts/dev.sh <build|install|bench|test|start|play [file]|stop|metrics|logs|check|smoke>
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -39,6 +39,7 @@ volume() { adb shell dumpsys audio | grep -A8 'STREAM_MUSIC:' | grep -m2 -E 'Mut
 case "${1:-}" in
   build)   ./gradlew assembleDebug -q --console=plain ;;
   install) "$0" build && adb install -r app/build/outputs/apk/debug/app-debug.apk ;;
+  bench)   ./gradlew assembleBenchmark -q --console=plain && adb install -r app/build/outputs/apk/benchmark/app-benchmark.apk ;;
   test)    ./gradlew connectedDebugAndroidTest --console=plain 2>&1 | grep -E "Starting|FAILED|Error|expected|Tests on|BUILD" ;;
   start)
     adb logcat -c; since=$(now)

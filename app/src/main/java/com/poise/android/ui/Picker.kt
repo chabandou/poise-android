@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -139,8 +138,7 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
         ) {
             options.forEachIndexed { i, label ->
                 val source = remember { MutableInteractionSource() }
-                val pressed by source.collectIsPressedAsState()
-                val press by animateFloatAsState(if (pressed) 1f else 0f, tween(150), label = "cardPress")
+                val press = rememberPress(source, tween(240)).value
                 val check by animateFloatAsState(if (i == checked) 1f else 0f, if (still) snap() else tween(SWITCH_MS), label = "cardCheck")
                 // Pressed cards lift toward the gold tint; the current one takes all of it
                 val base = lerp(pal.panel, pal.ink, 0.04f)
@@ -150,6 +148,7 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
                 val shape = RoundedCornerShape(12.dp)
                 Box(
                         Modifier.fillMaxWidth()
+                                .pressScale(source, 0.97f)
                                 .height(46.dp)
                                 .clip(shape)
                                 .background(fill)
