@@ -1,6 +1,9 @@
 package com.poise.android.ui
 
+import android.content.Context
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.compose.runtime.Composable
@@ -45,6 +48,61 @@ internal fun rememberBuzz(): (Buzz) -> Unit {
     val view = LocalView.current
     // Reads the setting when played, so gesture handlers that keep this lambda stay current
     return remember(view) { { b: Buzz -> if (PoiseSettings.haptics.value) view.performHapticFeedback(b.constant) } }
+}
+
+private const val RAMP_EVERY = 3 // ticks per tap: denser runs blur into a buzz
+private const val RAMP_FROM = 0.15f // the first tap's strength; they rise to RAMP_TO...
+private const val RAMP_TO = 0.6f // ...and a full click lands as the ring closes
+
+/**
+ * Plays a rising run of light taps at [times] (in [nowMs] time), one per few ticks the ignition
+ * wave lights, ending in a firm click at the last. Returns false where it can't (before Android
+ * 11, or without the primitives), so the caller plays its single [Buzz.Live] instead.
+ */
+@Composable
+internal fun rememberRamp(): (LongArray) -> Boolean {
+    val context = LocalContext.current
+    return remember(context) { { times: LongArray -> playRamp(context, times) } }
+}
+
+private fun playRamp(context: Context, times: LongArray): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || times.isEmpty()) return false
+    val tick = VibrationEffect.Composition.PRIMITIVE_LOW_TICK
+    val click = VibrationEffect.Composition.PRIMITIVE_CLICK
+    val vibrator = context.getSystemService(Vibrator::class.java) ?: return false
+    if (!vibrator.areAllPrimitivesSupported(tick, click)) return false
+    // Off in Poise or in Android's own touch feedback setting: played, but silently
+    val touch = Settings.System.getInt(context.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
+    if (!PoiseSettings.haptics.value || !touch) return true
+    // Each delay counts from the end of the tap before, so take its length off where Android says it
+    val (tickMs, clickMs) =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) vibrator.getPrimitiveDurations(tick, click).toList() else listOf(0, 0)
+    val effect = VibrationEffect.startComposition()
+    for (step in rampSteps(times, nowMs(), tickMs, clickMs)) {
+        effect.addPrimitive(if (step.click) click else tick, step.strength, step.waitMs)
+    }
+    vibrator.vibrate(effect.compose())
+    return true
+}
+
+internal class RampStep(val click: Boolean, val strength: Float, val waitMs: Int)
+
+/** The taps for [times] from [now]: every few ticks a rising tap, then the click at the last. */
+internal fun rampSteps(times: LongArray, now: Long, tickMs: Int, clickMs: Int): List<RampStep> {
+    val picks = times.indices.filter { it % RAMP_EVERY == 0 && it < times.lastIndex } + times.lastIndex
+    var at = now
+    var busy = 0
+    return picks.mapIndexed { n, i ->
+        val last = i == times.lastIndex
+        val step = RampStep(
+                last,
+                if (last) 1f else RAMP_FROM + (RAMP_TO - RAMP_FROM) * n / (picks.size - 1).coerceAtLeast(1),
+                (times[i] - at - busy).coerceAtLeast(0).toInt()
+        )
+        at = times[i]
+        busy = if (last) clickMs else tickMs
+        step
+    }
 }
 
 /** True when Android's "Remove animations" is on: ambient motion then stays still. */

@@ -3,7 +3,7 @@ package com.poise.android.ui
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
@@ -11,15 +11,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
@@ -35,9 +34,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,7 +48,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -80,17 +82,22 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -101,10 +108,15 @@ import com.poise.android.ui.theme.LocalPalette
 import com.poise.android.ui.theme.crossfade
 import com.poise.android.ui.theme.Palettes
 import com.poise.android.ui.theme.Rajdhani
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.launch
 
@@ -115,6 +127,7 @@ private enum class Page { Home, Settings, About }
 
 private const val GITHUB_URL = "https://github.com/chabandou/poise-android"
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(
         isProcessing: Boolean,
@@ -134,8 +147,28 @@ fun MainScreen(
     // Android's "Remove animations" or Poise's own Reduce motion
     val reduceMotion by PoiseSettings.reduceMotion.collectAsState()
     val still = rememberReduceMotion() || reduceMotion
-    var page by rememberSaveable { mutableStateOf(Page.Home) }
-    BackHandler(enabled = page != Page.Home) { page = Page.Home }
+    // Every page stays composed beside the others: switching only slides them, where building
+    // the next page cost about 95 ms, several dropped frames, on each switch
+    val pager = rememberPagerState { PAGES.size }
+    val scope = rememberCoroutineScope()
+    fun shown(p: Page) = pager.settledPage == p.ordinal || pager.currentPage == p.ordinal
+    fun go(p: Page) = scope.launch { pager.animateScrollToPage(p.ordinal, animationSpec = PAGE_SLIDE) }
+    // Swiping clicks past the middle between pages, like a detent
+    val swiping by pager.interactionSource.collectIsDraggedAsState()
+    val swipingNow by rememberUpdatedState(swiping)
+    LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.drop(1).collect { if (swipingNow) buzz(Buzz.Tick) } }
+    // Back returns Home. A back swipe (Android 14+) first draws the page back with the gesture
+    val backPeek = remember { Animatable(0f) }
+    PredictiveBackHandler(enabled = pager.targetPage != Page.Home.ordinal) { swipe ->
+        try {
+            swipe.collect { backPeek.snapTo(it.progress) }
+            scope.launch { backPeek.animateTo(0f, PAGE_SLIDE) }
+            go(Page.Home)
+        } catch (e: CancellationException) {
+            scope.launch { backPeek.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)) }
+            throw e
+        }
+    }
 
     // Home's clock lives here, so leaving Home mid-session doesn't replay the ignition
     val motion = remember { HomeMotion() }
@@ -145,9 +178,11 @@ fun MainScreen(
         stats != null -> Phase.Live
         else -> Phase.Starting
     }
+    val ramp = rememberRamp()
     LaunchedEffect(phase) {
         motion.enter(phase, (outputVolume * TICKS).roundToInt())
-        if (phase == Phase.Live && !still) {
+        // The taps rise with the wave around the ring (Android 11+), or one buzz as it closes
+        if (phase == Phase.Live && !still && !ramp(motion.ignitions())) {
             delay(motion.ignitedAt - nowMs())
             buzz(Buzz.Live)
         }
@@ -157,7 +192,7 @@ fun MainScreen(
     // where it should be.
     val focused = LocalWindowInfo.current.isWindowFocused
     val resumed = rememberResumed()
-    val awake = focused && resumed && page == Page.Home
+    val awake = focused && resumed && shown(Page.Home)
     LaunchedEffect(phase, awake, still) {
         while (awake && motion.moving) {
             motion.restUntil()?.let { delay(it - nowMs()) }
@@ -169,42 +204,55 @@ fun MainScreen(
     }
 
     Column(Modifier.fillMaxSize().background(pal.bg)) {
-        Column(Modifier.weight(1f).fillMaxWidth().statusBarsPadding().padding(horizontal = 18.dp)) {
-            Header(still)
+        Column(Modifier.weight(1f).fillMaxWidth().statusBarsPadding()) {
+            Box(Modifier.padding(horizontal = 18.dp)) { Header(still) }
             Spacer(Modifier.height(16.dp))
-            AnimatedContent(
-                    page,
-                    Modifier.weight(1f),
-                    transitionSpec = {
-                        val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                        (fadeIn(tween(220, delayMillis = 60)) + slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { dir * it / 8 }) togetherWith
-                                (fadeOut(tween(140)) + slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -dir * it / 12 })
+            HorizontalPager(
+                    pager,
+                    Modifier.weight(1f).graphicsLayer {
+                        val k = backPeek.value
+                        scaleX = 1f - 0.06f * k
+                        scaleY = scaleX
+                        translationX = k * 24.dp.toPx()
                     },
-                    label = "page"
-            ) { p ->
-                Column(Modifier.fillMaxSize()) {
-                    when (p) {
-                        Page.Home -> HomePage(motion, stats, outputVolume, onVolumeChange, { onToggleProcessing(!isProcessing) }, still)
+                    beyondBoundsPageCount = PAGES.size - 1
+            ) { i ->
+                Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
+                    when (PAGES[i]) {
+                        Page.Home -> TextScaleUpTo(1.3f) { HomePage(motion, stats, outputVolume, onVolumeChange, { onToggleProcessing(!isProcessing) }, still) }
                         Page.Settings -> SettingsPage(system, onAllowBattery, onOpenNotificationSettings, onAddTile)
-                        Page.About -> AboutPage(versionName, onOpenUrl, still)
+                        Page.About -> AboutPage(versionName, onOpenUrl, still, shown(Page.About))
                     }
                 }
             }
         }
-        NavBar(page) {
-            if (it != page) buzz(Buzz.Tap)
-            page = it
+        NavBar(
+                PAGES[pager.currentPage],
+                { pager.currentPage + pager.currentPageOffsetFraction },
+                {
+                    // Sinks on the way from the page it left to the one it is heading for
+                    val from = pager.settledPage
+                    val span = abs(pager.targetPage - from).coerceAtLeast(1)
+                    val pos = pager.currentPage + pager.currentPageOffsetFraction
+                    sin(PI.toFloat() * (abs(pos - from) / span).coerceIn(0f, 1f))
+                }
+        ) {
+            if (it.ordinal != pager.targetPage) buzz(Buzz.Tap)
+            go(it)
         }
     }
 }
+
+private val PAGES = Page.values()
+private val PAGE_SLIDE = spring<Float>(dampingRatio = 1f, stiffness = Spring.StiffnessMediumLow)
 
 private const val STEADY_EXTRA_MS = 33L // two skipped frames at 60 Hz
 
 private val SLIDER_TICK_GAP = 9.dp
 private val SLIDER_GIVE = 14.dp // how far the diamond can be pulled past an end, at most
 
-// The nav highlight and the theme ring glide by spring, so a tap mid-glide turns them without
-// a stop, and they sink with their speed: low on the way, full height as they settle
+// The theme ring glides by spring, so a tap mid-glide turns it without a stop, and it sinks
+// with its speed: low on the way, full size as it settles
 private val GLIDE = spring<Float>(dampingRatio = 0.85f, stiffness = 140f)
 private const val GLIDE_DIP_SPEED = 4f // slots a second, where the dip is deepest
 
@@ -275,7 +323,7 @@ private fun Header(still: Boolean) {
 private fun Title(text: String, modifier: Modifier = Modifier, size: Int = 34) {
     Text(
             text,
-            modifier = modifier,
+            modifier = modifier.semantics { heading() },
             color = LocalPalette.current.ink,
             fontFamily = Rajdhani,
             fontWeight = FontWeight.Bold,
@@ -358,11 +406,11 @@ private fun SettingRow(
         Marker(pal.secondary, markerTurn)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            OneLine(title, TextStyle(color = pal.ink, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 20.sp))
-            OneLine(subtitle, TextStyle(color = pal.muted, fontSize = 12.sp, lineHeight = 16.sp))
+            RowTitle(title)
+            Subtitle(subtitle)
         }
         Spacer(Modifier.width(12.dp))
-        trailing()
+        TextScaleUpTo(1.3f, trailing) // short values and buttons: the title gets the room
     }
 }
 
@@ -381,10 +429,29 @@ private fun RollText(text: String, style: TextStyle, up: Boolean = true) {
     ) { Text(it, style = style) }
 }
 
-/** A label kept to one line: the wording fits at up to 1.3x text size, and past that ends in "…". */
+// A row's title and the muted line under it. At large text sizes they take more lines, hyphenated,
+// rather than lose words; Settings scrolls, so the rows can grow
 @Composable
-private fun OneLine(text: String, style: TextStyle) {
-    Text(text, style = style, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+private fun RowTitle(text: String) {
+    Text(text, color = LocalPalette.current.ink, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = WRAPPED)
+}
+
+@Composable
+private fun Subtitle(text: String) {
+    Text(text, color = LocalPalette.current.muted, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, style = WRAPPED)
+}
+
+private val WRAPPED = TextStyle(hyphens = Hyphens.Auto)
+
+/**
+ * Lets the user's text size grow [content]'s text to at most [max] times, for places that can't
+ * grow with it: Home, a panel that doesn't scroll; the row of five theme tiles; and the short
+ * values and buttons beside a row's title, so the title gets the room.
+ */
+@Composable
+private fun TextScaleUpTo(max: Float, content: @Composable () -> Unit) {
+    val d = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(d.density, min(d.fontScale, max)), content = content)
 }
 
 /**
@@ -485,7 +552,7 @@ private fun ColumnScope.HomePage(
         val stopNote by AudioServiceState.stopNote.collectAsState()
         AnimatedContent(
                 stopNote.takeIf { phase == Phase.Idle },
-                Modifier.fillMaxWidth().height(62.dp).panel(),
+                Modifier.fillMaxWidth().height(62.dp).panel().semantics { liveRegion = LiveRegionMode.Polite },
                 transitionSpec = {
                     (slideInVertically(tween(paced(380), easing = FastOutSlowInEasing)) { it / 2 } + fadeIn(tween(paced(300)))) togetherWith
                             (slideOutVertically(tween(paced(380), easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(paced(200))))
@@ -515,6 +582,7 @@ private fun StageTitle(motion: HomeMotion) {
     val pal = LocalPalette.current
     AnimatedContent(
             motion.phase,
+            Modifier.semantics { liveRegion = LiveRegionMode.Polite }, // TalkBack says each change
             transitionSpec = {
                 (slideInVertically(tween(paced(380), easing = FastOutSlowInEasing)) { it / 2 } + fadeIn(tween(paced(300)))) togetherWith
                         (slideOutVertically(tween(paced(380), easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(paced(200))))
@@ -580,7 +648,7 @@ private fun rememberHeadphonesConnected(): Boolean {
 @Composable
 private fun Caption(text: String) {
     val pal = LocalPalette.current
-    Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(top = 2.dp).semantics { heading() }, verticalAlignment = Alignment.CenterVertically) {
         Text(text.uppercase(), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, letterSpacing = 0.24.em)
         Spacer(Modifier.width(10.dp))
         Box(Modifier.weight(1f).height(1.dp).background(pal.line))
@@ -641,10 +709,10 @@ private fun SliderCard(
     Column(Modifier.fillMaxWidth().panel().padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                OneLine(title, TextStyle(color = pal.ink, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 20.sp))
-                OneLine(subtitle, TextStyle(color = pal.muted, fontSize = 12.sp, lineHeight = 16.sp))
+                RowTitle(title)
+                Subtitle(subtitle)
             }
-            RollDigits("$number $unit", TextStyle(color = pal.accent, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 22.sp), up)
+            TextScaleUpTo(1.3f) { RollDigits("$number $unit", TextStyle(color = pal.accent, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 22.sp), up) }
         }
         // A ruler lit up to the value, with the gold diamond riding on it. Drag or tap anywhere; the
         // ticks swell around the diamond, more while held, and past either end it gives a little
@@ -828,7 +896,7 @@ private fun ColumnScope.SettingsPage(
         val ringAt = remember { Animatable(theme.toFloat()) }
         LaunchedEffect(theme) { ringAt.animateTo(theme.toFloat(), GLIDE) }
         Row(
-                Modifier.drawWithContent {
+                Modifier.selectableGroup().drawWithContent {
                     drawContent()
                     val gap = 8.dp.toPx()
                     val n = Palettes.size
@@ -847,11 +915,13 @@ private fun ColumnScope.SettingsPage(
                 },
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Palettes.forEachIndexed { i, p ->
-                ThemeTile(p.name, p.panel, p.accent, i == theme, Modifier.weight(1f)) {
-                    if (i != theme) {
-                        buzz(Buzz.Tap)
-                        if (still) PoiseSettings.setTheme(i) else view.crossfade(THEME_FADE_MS.toLong()) { PoiseSettings.setTheme(i) }
+            TextScaleUpTo(1.3f) {
+                Palettes.forEachIndexed { i, p ->
+                    ThemeTile(p.name, p.panel, p.accent, i == theme, Modifier.weight(1f)) {
+                        if (i != theme) {
+                            buzz(Buzz.Tap)
+                            if (still) PoiseSettings.setTheme(i) else view.crossfade(THEME_FADE_MS.toLong()) { PoiseSettings.setTheme(i) }
+                        }
                     }
                 }
             }
@@ -944,7 +1014,7 @@ private const val GITHUB =
 private const val WARNING = "M12 3l9.5 16.5h-19z M12 10v4M12 17v.01"
 
 @Composable
-private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Unit, still: Boolean) {
+private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Unit, still: Boolean, shown: Boolean) {
     val pal = LocalPalette.current
 
     Column(
@@ -952,7 +1022,7 @@ private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Un
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
     ) {
-        Emblem(still)
+        Emblem(still, shown)
         Spacer(Modifier.height(10.dp))
         Title("Poise Voice Isolator", size = 30)
         Text("v$versionName", color = pal.secondary, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
@@ -1002,27 +1072,25 @@ private const val ABOUT_ICON =
         "M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm16-40a8,8,0,0,1-8,8,16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40A8,8,0,0,1,144,176ZM112,84a12,12,0,1,1,12,12A12,12,0,0,1,112,84Z"
 
 @Composable
-private fun NavBar(page: Page, onSelect: (Page) -> Unit) {
+private fun NavBar(page: Page, position: () -> Float, dip: () -> Float, onSelect: (Page) -> Unit) {
     val pal = LocalPalette.current
-    // One highlight glides from tab to tab, sinking lower on the way and rising as it arrives
-    val target = page.ordinal.toFloat()
-    val at = remember { Animatable(target) }
-    LaunchedEffect(page) { at.animateTo(target, GLIDE) }
+    // One highlight rides with the pages, sinking lower on the way and rising as it arrives
     Column(Modifier.fillMaxWidth().background(pal.bar)) {
         RowDivider()
         Row(
                 Modifier.fillMaxWidth()
                         .navigationBarsPadding()
                         .height(72.dp)
+                        .selectableGroup()
                         .drawBehind {
                             val pad = 12.dp.toPx()
                             val gap = 8.dp.toPx()
                             val n = Page.values().size
                             val slot = (size.width - 2 * pad - (n - 1) * gap) / n
-                            val h = size.height * (1f - 0.4f * glideDip(at.velocity))
+                            val h = size.height * (1f - 0.4f * dip())
                             drawRect(
                                     Brush.verticalGradient(listOf(Color.Transparent, pal.accentWash), startY = size.height - h, endY = size.height),
-                                    Offset(pad + at.value * (slot + gap), size.height - h),
+                                    Offset(pad + position() * (slot + gap), size.height - h),
                                     Size(slot, h)
                             )
                         }

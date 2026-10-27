@@ -108,10 +108,11 @@ private fun lock(ms: Float) = if (ms < 0f) 0f else 10f * exp(-ms / 110f) * sin(2
  * and lock into a rub el hizb with a flash of light, and تَمَّ بِحَمْدِ اللَّهِ ("it is finished, with praise to God",
  * the line scribes closed a manuscript with) is written inside from the bottom up. The squares
  * then swell with light and keep breathing while the page is in view. Tap again and
- * it plays back. It stays still until tapped, and leaving the page shows the plain emblem again.
+ * it plays back. It stays still until tapped, and leaving the page ([shown] false) shows the plain
+ * emblem again.
  */
 @Composable
-internal fun Emblem(still: Boolean) {
+internal fun Emblem(still: Boolean, shown: Boolean) {
     val pal = LocalPalette.current
     val buzz = rememberBuzz()
     val scope = rememberCoroutineScope()
@@ -121,7 +122,7 @@ internal fun Emblem(still: Boolean) {
     // Once sealed, ms since: the squares swell with light, then breathe while the page is in view
     var since by remember { mutableFloatStateOf(0f) }
     val done by remember { derivedStateOf { sealed && t.value >= SEAL_END } }
-    val awake = LocalWindowInfo.current.isWindowFocused && rememberResumed()
+    val awake = shown && LocalWindowInfo.current.isWindowFocused && rememberResumed()
     LaunchedEffect(done, still, awake) {
         if (!done || still || !awake) return@LaunchedEffect
         val from = withFrameMillis { it } - since.toLong()
@@ -131,6 +132,12 @@ internal fun Emblem(still: Boolean) {
         }
     }
     LaunchedEffect(sealed) { if (!sealed) since = 0f }
+    LaunchedEffect(shown) {
+        if (!shown) {
+            sealed = false
+            t.snapTo(0f)
+        }
+    }
 
     // A firm tick as each square locks
     LaunchedEffect(Unit) {

@@ -167,6 +167,11 @@ internal class HomeMotion {
     /** When the wave has turned the last lit tick: the disc pops and the pings begin. */
     val ignitedAt get() = liveAt + ignitedAfter
 
+    /** When the ignition wave has fully turned each lit tick, in ms of [nowMs] time. */
+    fun ignitions() = LongArray(lit) { liveAt + litAfter(it) }
+
+    private fun litAfter(i: Int) = (waveMs * sweepTime((5f * i + SWEEP_FADE_DEG) / waveSpan)).toLong()
+
     fun enter(p: Phase, litTicks: Int) {
         now = nowMs()
         lit = max(litTicks, 1)
@@ -178,7 +183,7 @@ internal class HomeMotion {
                 // The entrance's edge and crest, over just the lit arc
                 waveSpan = 5f * lit + SWEEP_FADE_DEG + SWEEP_CREST_DEG
                 waveMs = max(SWEEP_MS * waveSpan / (270f + SWEEP_FADE_DEG + SWEEP_CREST_DEG), IGNITE_MIN_MS)
-                ignitedAfter = (waveMs * sweepTime((5f * (lit - 1) + SWEEP_FADE_DEG) / waveSpan)).toLong()
+                ignitedAfter = litAfter(lit - 1)
             }
             Phase.Idle -> {
                 stoppedLive = phase == Phase.Live

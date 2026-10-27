@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -133,7 +134,8 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
                         .shadow(12.dp, panelShape)
                         .background(pal.panel, panelShape)
                         .border(1.dp, pal.line, panelShape)
-                        .padding(8.dp),
+                        .padding(8.dp)
+                        .selectableGroup(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             options.forEachIndexed { i, label ->
