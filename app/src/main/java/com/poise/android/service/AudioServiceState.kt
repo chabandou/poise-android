@@ -10,14 +10,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * before service starts.
  */
 object AudioServiceState {
-    private val _isRunning = MutableStateFlow(false)
-    val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
+    // On from the Start tap (permission dialogs included) until the session ends or fails.
+    // One flag, so the UI cannot get stuck between "starting" and "running".
+    private val _isActive = MutableStateFlow(false)
+    val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
 
     private val _stats = MutableStateFlow<ProcessingStats?>(null)
     val stats: StateFlow<ProcessingStats?> = _stats.asStateFlow()
-
-    private val _isStarting = MutableStateFlow(false)
-    val isStarting: StateFlow<Boolean> = _isStarting.asStateFlow()
 
     // Output volume (0.0 to 1.0, default 38%)
     private val _outputVolume = MutableStateFlow(0.38f)
@@ -27,15 +26,8 @@ object AudioServiceState {
         _outputVolume.value = volume.coerceIn(0f, 1f)
     }
 
-    fun setRunning(running: Boolean) {
-        _isRunning.value = running
-        if (running) {
-            _isStarting.value = false
-        }
-    }
-
-    fun setStarting(starting: Boolean) {
-        _isStarting.value = starting
+    fun setActive(active: Boolean) {
+        _isActive.value = active
     }
 
     fun updateStats(newStats: ProcessingStats?) {
@@ -43,8 +35,7 @@ object AudioServiceState {
     }
 
     fun reset() {
-        _isRunning.value = false
-        _isStarting.value = false
+        _isActive.value = false
         _stats.value = null
     }
 }

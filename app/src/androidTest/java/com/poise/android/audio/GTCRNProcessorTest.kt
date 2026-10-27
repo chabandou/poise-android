@@ -14,7 +14,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class GTCRNProcessorTest {
 
-    /** Quiet frames skip the model but keep STFT/iSTFT, so output = input delayed by one hop. */
+    /** Quiet frames skip the model but keep STFT/iSTFT: output = turned-down input, one hop late. */
     @Test
     fun bypassedFramesReconstructInputWithOneHopDelay() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -39,7 +39,7 @@ class GTCRNProcessorTest {
         }
 
         for (i in hop until input.size) {
-            assertEquals("sample $i", input[i - hop], output[i], 1e-4f)
+            assertEquals("sample $i", input[i - hop] * GTCRNProcessor.BYPASS_GAIN, output[i], 1e-5f)
         }
     }
 

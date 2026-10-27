@@ -29,6 +29,10 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         const val NUM_BINS = 257 // FFT_SIZE/2 + 1
         const val SAMPLE_RATE = 16000 // Model expects 16kHz
 
+        // Quiet frames that skip the model are turned down by 20 dB, not passed through as they
+        // are. Otherwise a steady hiss the model removes during speech comes back in every pause.
+        const val BYPASS_GAIN = 0.1f
+
         // Cache sizes (from model analysis)
         private const val CONV_CACHE_SIZE = 2 * 1 * 16 * 16 * 33 // 16,896
         private const val TRA_CACHE_SIZE = 2 * 3 * 1 * 1 * 16 // 96
@@ -165,7 +169,8 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                 }
 
         // VAD check: quiet frames skip only the model. They still go through STFT and iSTFT, so
-        // the output delay and overlap-add state stay the same when sound comes back.
+        // the output delay and overlap-add state stay the same when sound comes back, and the
+        // overlapping windows fade smoothly between model output and the turned-down input.
         val isActive = checkVAD(frame)
 
         return try {
@@ -192,6 +197,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                         // A failed run passes the spectrum through, keeping the same delay
                         modelOutput ?: stftResult
                     } else {
+                        for (i in stftResult.indices) stftResult[i] *= BYPASS_GAIN
                         stftResult
                     }
 

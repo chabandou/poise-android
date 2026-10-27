@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
                 if (result.resultCode == Activity.RESULT_OK && result.data != null) {
                     startAudioCaptureService(result.resultCode, result.data!!)
                 } else {
-                    AudioServiceState.setStarting(false)
+                    AudioServiceState.setActive(false)
                     Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
                 if (isGranted && pendingStart) {
                     requestMediaProjection()
                 } else if (!isGranted) {
-                    AudioServiceState.setStarting(false)
+                    AudioServiceState.setActive(false)
                     Toast.makeText(this, "Audio permission required", Toast.LENGTH_SHORT).show()
                 }
                 pendingStart = false
@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         // Repairs a media mute left by a crash. Skipped while a session runs, which owns the mute.
-        if (!AudioServiceState.isRunning.value && !AudioServiceState.isStarting.value) {
+        if (!AudioServiceState.isActive.value) {
             AudioCaptureService.restoreSystemAudio(this)
         }
 
@@ -76,13 +76,12 @@ class MainActivity : ComponentActivity() {
                         color = MaterialTheme.colorScheme.background
                 ) {
                     // Use shared state that persists across service lifecycle
-                    val isRunning by AudioServiceState.isRunning.collectAsState()
-                    val isStarting by AudioServiceState.isStarting.collectAsState()
+                    val isActive by AudioServiceState.isActive.collectAsState()
                     val stats by AudioServiceState.stats.collectAsState()
                     val outputVolume by AudioServiceState.outputVolume.collectAsState()
 
                     MainScreen(
-                            isProcessing = isRunning || isStarting,
+                            isProcessing = isActive,
                             stats = stats,
                             outputVolume = outputVolume,
                             onVolumeChange = { AudioServiceState.setOutputVolume(it) },
@@ -101,7 +100,7 @@ class MainActivity : ComponentActivity() {
 
     private fun startProcessing() {
         pendingStart = true
-        AudioServiceState.setStarting(true) // Immediate UI feedback
+        AudioServiceState.setActive(true) // Immediate UI feedback
 
         // Check notification permission first (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

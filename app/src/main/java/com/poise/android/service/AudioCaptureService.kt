@@ -4,8 +4,6 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -61,7 +59,6 @@ class AudioCaptureService : Service() {
     private var audioPipeline: AudioPipeline? = null
     private var mediaProjection: MediaProjection? = null
     private var audioManager: AudioManager? = null
-    private var audioFocusRequest: AudioFocusRequest? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var notificationJob: Job? = null
 
@@ -163,9 +160,6 @@ class AudioCaptureService : Service() {
                 Handler(Looper.getMainLooper())
         )
 
-        // Request audio focus to make other apps duck/pause
-        requestAudioFocus()
-
         // Mute STREAM_MUSIC - our output on STREAM_RING will still play
         muteSystemAudio()
 
@@ -178,7 +172,6 @@ class AudioCaptureService : Service() {
                 started.await()
                 // Stop may have been tapped while starting; then this pipeline is already gone.
                 if (audioPipeline !== pipeline) return@launch
-                AudioServiceState.setRunning(true) // Update shared state
                 Log.i(TAG, "Audio capture started")
 
                 // The loop can also end by itself (e.g. capture died); then stop the service too.
@@ -204,9 +197,6 @@ class AudioCaptureService : Service() {
         // Restore system volume
         restoreSystemAudio(this)
 
-        // Abandon audio focus
-        abandonAudioFocus()
-
         // Stop pipeline
         audioPipeline?.stop()
         audioPipeline = null
@@ -224,53 +214,6 @@ class AudioCaptureService : Service() {
         stopSelf()
 
         Log.i(TAG, "Audio capture stopped")
-    }
-
-    private fun requestAudioFocus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val audioAttributes =
-                    AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_GAME)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                            .build()
-
-            audioFocusRequest =
-                    AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
-                            .setAudioAttributes(audioAttributes)
-                            .setAcceptsDelayedFocusGain(false)
-                            .setOnAudioFocusChangeListener { focusChange ->
-                                // Just log focus changes, don't stop - we want to keep processing
-                                when (focusChange) {
-                                    AudioManager.AUDIOFOCUS_LOSS -> {
-                                        Log.w(TAG, "Audio focus lost (ignoring)")
-                                    }
-                                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                                        Log.w(TAG, "Audio focus lost transient (ignoring)")
-                                    }
-                                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                                        Log.w(TAG, "Audio focus duck request (ignoring)")
-                                    }
-                                }
-                            }
-                            .build()
-
-            val result = audioManager?.requestAudioFocus(audioFocusRequest!!)
-            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                Log.i(TAG, "Audio focus granted (exclusive)")
-            } else {
-                Log.w(TAG, "Audio focus request failed: $result")
-            }
-        }
-    }
-
-    private fun abandonAudioFocus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest?.let {
-                audioManager?.abandonAudioFocusRequest(it)
-                Log.i(TAG, "Audio focus abandoned")
-            }
-            audioFocusRequest = null
-        }
     }
 
     private fun muteSystemAudio() {
