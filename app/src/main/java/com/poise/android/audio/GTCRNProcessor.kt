@@ -21,6 +21,8 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
 
     companion object {
         private const val TAG = "GTCRNProcessor"
+        // The desktop app's rewrite of upstream's streaming export (poise-voice-isolator
+        // tools/optimize_gtcrn.py), with its unused opset imports stripped for ONNX Runtime 1.16
         private const val ONNX_MODEL_NAME = "gtcrn.onnx"
 
         // Audio parameters
