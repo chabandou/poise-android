@@ -232,8 +232,11 @@ class AudioPipeline(private val context: Context) {
                     audioTrack?.let { track ->
                         if (track.underrunCount > underruns) {
                             underruns = track.underrunCount
-                            track.bufferSizeInFrames = track.bufferSizeInFrames + FRAME_SIZE
-                            Log.i(TAG, "Underrun, output buffer now ${ms(track.bufferSizeInFrames.toLong())} ms")
+                            val before = track.bufferSizeInFrames
+                            // Capped at the track's capacity; past that, more underruns change nothing
+                            if (track.setBufferSizeInFrames(before + FRAME_SIZE) > before) {
+                                Log.i(TAG, "Underrun, output buffer now ${ms(track.bufferSizeInFrames.toLong())} ms")
+                            }
                         }
                     }
 

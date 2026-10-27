@@ -1,8 +1,10 @@
 package com.poise.android.service
 
 import android.app.*
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.media.AudioManager
 import android.media.projection.MediaProjection
@@ -11,8 +13,10 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.poise.android.MainActivity
 import com.poise.android.R
 import com.poise.android.audio.AudioPipeline
@@ -42,6 +46,13 @@ class AudioCaptureService : Service() {
         private const val PREFS = "poise"
         private const val KEY_MUSIC_MUTED = "music_muted_by_poise"
 
+        // System broadcasts for media volume and mute changes; the names are hidden API constants
+        private const val ACTION_VOLUME_CHANGED = "android.media.VOLUME_CHANGED_ACTION"
+        private const val ACTION_STREAM_MUTE_CHANGED = "android.media.STREAM_MUTE_CHANGED_ACTION"
+        private const val EXTRA_STREAM_TYPE = "android.media.EXTRA_VOLUME_STREAM_TYPE"
+        private const val EXTRA_SHOW_UI = "android.media.EXTRA_VOLUME_SHOW_UI"
+        private const val EXTRA_STREAM_MUTED = "android.media.EXTRA_STREAM_VOLUME_MUTED"
+
         /**
          * Unmutes media if Poise muted it. The flag is on disk, so this also repairs a mute left
          * behind when the process was killed before it could stop cleanly.
@@ -61,6 +72,39 @@ class AudioCaptureService : Service() {
     private var audioManager: AudioManager? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var notificationJob: Job? = null
+
+    // Volume keys still act on media during a session, and volume up unmutes it, which brings the
+    // original audio back under ours. So keep media muted and turn each press into a step of
+    // Poise's own volume. While media is muted Android reports its new level as 0, so the
+    // direction comes from the mute instead: volume up unmutes first, volume down leaves it muted.
+    private var watchingMediaVolume = false
+    private var lastRaiseMs = 0L
+    private val mediaVolumeReceiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    if (intent.getIntExtra(EXTRA_STREAM_TYPE, -1) != AudioManager.STREAM_MUSIC) return
+                    when (intent.action) {
+                        ACTION_STREAM_MUTE_CHANGED -> {
+                            if (intent.getBooleanExtra(EXTRA_STREAM_MUTED, true)) return
+                            audioManager?.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+                            stepOutputVolume(+1)
+                            lastRaiseMs = SystemClock.uptimeMillis()
+                            Log.i(TAG, "Volume up: media muted again")
+                        }
+                        // A key press shows the volume panel; the headphones' own echoes of it do not
+                        ACTION_VOLUME_CHANGED -> {
+                            if (!intent.getBooleanExtra(EXTRA_SHOW_UI, false)) return
+                            // Volume up was already counted by its unmute just before
+                            if (SystemClock.uptimeMillis() - lastRaiseMs > 500) stepOutputVolume(-1)
+                            lastRaiseMs = 0
+                        }
+                    }
+                }
+            }
+
+    private fun stepOutputVolume(steps: Int) {
+        AudioServiceState.setOutputVolume(AudioServiceState.outputVolume.value + steps * VOLUME_STEP)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -100,14 +144,8 @@ class AudioCaptureService : Service() {
             ACTION_STOP -> {
                 stopCapture()
             }
-            ACTION_VOLUME_UP -> {
-                val current = AudioServiceState.outputVolume.value
-                AudioServiceState.setOutputVolume(current + VOLUME_STEP)
-            }
-            ACTION_VOLUME_DOWN -> {
-                val current = AudioServiceState.outputVolume.value
-                AudioServiceState.setOutputVolume(current - VOLUME_STEP)
-            }
+            ACTION_VOLUME_UP -> stepOutputVolume(+1)
+            ACTION_VOLUME_DOWN -> stepOutputVolume(-1)
         }
         return START_NOT_STICKY
     }
@@ -160,7 +198,7 @@ class AudioCaptureService : Service() {
                 Handler(Looper.getMainLooper())
         )
 
-        // Mute STREAM_MUSIC - our output on STREAM_RING will still play
+        // Mute STREAM_MUSIC - our output on the voice call stream still plays
         muteSystemAudio()
 
         // Start audio pipeline
@@ -194,7 +232,11 @@ class AudioCaptureService : Service() {
         // Reset shared state
         AudioServiceState.reset()
 
-        // Restore system volume
+        // Restore system volume, after we stop re-muting it
+        if (watchingMediaVolume) {
+            unregisterReceiver(mediaVolumeReceiver)
+            watchingMediaVolume = false
+        }
         restoreSystemAudio(this)
 
         // Stop pipeline
@@ -220,12 +262,19 @@ class AudioCaptureService : Service() {
         val am = audioManager ?: return
         // Mute, not volume 0: a mute covers every output (speaker, headphones, Bluetooth) and keeps
         // each output's own volume, so switching output mid-session cannot bring the original back.
-        // Media the user muted themselves stays theirs, and we leave it muted at stop.
-        if (am.isStreamMute(AudioManager.STREAM_MUSIC)) return
-        // Written before muting, so a crash in between still gets repaired
-        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_MUSIC_MUTED, true).commit()
-        am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
-        Log.i(TAG, "STREAM_MUSIC muted")
+        // Media the user muted themselves stays theirs: we neither keep it muted nor unmute it.
+        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!am.isStreamMute(AudioManager.STREAM_MUSIC)) {
+            // Written before muting, so a crash in between still gets repaired
+            prefs.edit().putBoolean(KEY_MUSIC_MUTED, true).commit()
+            am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+            Log.i(TAG, "STREAM_MUSIC muted")
+        }
+        if (prefs.getBoolean(KEY_MUSIC_MUTED, false) && !watchingMediaVolume) {
+            val filter = IntentFilter(ACTION_VOLUME_CHANGED).apply { addAction(ACTION_STREAM_MUTE_CHANGED) }
+            ContextCompat.registerReceiver(this, mediaVolumeReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            watchingMediaVolume = true
+        }
     }
 
     private fun createNotificationChannel() {
