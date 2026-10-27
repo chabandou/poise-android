@@ -90,7 +90,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     
     // ONNX Runtime for Android
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
+    // Built by scripts/build-ort.sh with only the model's operators (2.3 MB instead of 14.6 MB)
+    implementation(files("libs/onnxruntime-poise-1.16.3.aar"))
     
     // Coroutines for async audio processing
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

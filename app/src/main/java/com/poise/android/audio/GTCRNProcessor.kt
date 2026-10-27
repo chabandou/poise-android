@@ -12,7 +12,7 @@ import java.nio.FloatBuffer
  * GTCRN (Gated Temporal Convolutional Recurrent Network) processor for speech denoising.
  *
  * This is a lightweight alternative to the DeepFilterNet model with:
- * - 0.34 MB model size (vs ~10 MB)
+ * - 0.25 MB model size (vs ~10 MB)
  * - Spectrogram-based processing (STFT -> ONNX -> iSTFT)
  * - State caching for real-time streaming
  * - Expected RTF < 1.0 on mobile devices
@@ -21,9 +21,10 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
 
     companion object {
         private const val TAG = "GTCRNProcessor"
-        // The desktop app's rewrite of upstream's streaming export (poise-voice-isolator
-        // tools/optimize_gtcrn.py), with its unused opset imports stripped for ONNX Runtime 1.16
-        private const val ONNX_MODEL_NAME = "gtcrn.onnx"
+        // models/gtcrn.onnx in ORT format, which is all the app's minimal ONNX Runtime loads.
+        // scripts/build-ort.sh makes both. The .onnx is the desktop app's rewrite of upstream's
+        // streaming export (poise-voice-isolator tools/optimize_gtcrn.py), unused opsets stripped.
+        private const val ONNX_MODEL_NAME = "gtcrn.ort"
 
         // Audio parameters
         const val FRAME_SIZE = 256 // hop_length (samples per frame)
@@ -102,7 +103,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         // Load straight from the APK, so an app update always brings its own model.
         // Older versions cached a copy in filesDir that never updated; remove it.
         val modelBytes = context.assets.open(ONNX_MODEL_NAME).use { it.readBytes() }
-        File(context.filesDir, ONNX_MODEL_NAME).delete()
+        File(context.filesDir, "gtcrn.onnx").delete()
 
         // Create optimized session options
         val sessionOptions =
@@ -117,20 +118,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                     // Enable memory pattern optimization
                     setMemoryPatternOptimization(true)
 
-                    // Try XNNPACK first (optimized for ARM), then NNAPI
-                    try {
-                        // XNNPACK is often faster than NNAPI for small models
-                        addXnnpack(mapOf("intra_op_num_threads" to "1"))
-                        Log.i(TAG, "XNNPACK acceleration enabled")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "XNNPACK not available, trying NNAPI: ${e.message}")
-                        try {
-                            addNnapi()
-                            Log.i(TAG, "NNAPI acceleration enabled")
-                        } catch (e2: Exception) {
-                            Log.w(TAG, "NNAPI not available, using CPU: ${e2.message}")
-                        }
-                    }
+                    // CPU only: the minimal runtime has no XNNPACK or NNAPI
                 }
 
         val env = ortEnv!!
