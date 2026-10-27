@@ -169,6 +169,9 @@ class AudioPipeline(private val context: Context) {
                         .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                         .build()
 
+        // Blocking writes keep the track's buffer full, so its whole size is delay. Start at two
+        // frames and let the loop grow it only when the speaker actually runs dry.
+        audioTrack?.bufferSizeInFrames = 2 * FRAME_SIZE
         audioTrack?.play()
         Log.i(TAG, "AudioTrack started: $SAMPLE_RATE Hz, low-latency mode")
     }
@@ -177,9 +180,16 @@ class AudioPipeline(private val context: Context) {
         // Capture already runs at the model's rate, so one read is one model frame
         val readSize = FRAME_SIZE
         val inputBuffer = FloatArray(readSize)
+        val skipBuffer = FloatArray(audioRecord?.bufferSizeInFrames ?: 0)
+        val timestamp = AudioTimestamp()
         var statsUpdateCounter = 0
         var healthLogCounter = 0
+        var underruns = 0
+        // Frames taken from capture (read, skipped or lost) and frames handed to the speaker
         var framesRead = 0L
+        var framesWritten = 0L
+        var lostFrames = 0L
+        var skippedFrames = 0L
 
         while (_isRunning.value && currentCoroutineContext().isActive) {
             try {
@@ -209,6 +219,7 @@ class AudioPipeline(private val context: Context) {
                     }
 
                     audioTrack?.write(outputAudio, 0, outputAudio.size, AudioTrack.WRITE_BLOCKING)
+                    framesWritten += outputAudio.size
                 }
 
                 // Update stats
@@ -216,11 +227,42 @@ class AudioPipeline(private val context: Context) {
                 if (statsUpdateCounter >= 10) {
                     statsUpdateCounter = 0
                     gtcrnProcessor?.getStats()?.let { AudioServiceState.updateStats(it) }
+
+                    // Each underrun is a click: give the track one more frame of headroom
+                    audioTrack?.let { track ->
+                        if (track.underrunCount > underruns) {
+                            underruns = track.underrunCount
+                            track.bufferSizeInFrames = track.bufferSizeInFrames + FRAME_SIZE
+                            Log.i(TAG, "Underrun, output buffer now ${ms(track.bufferSizeInFrames.toLong())} ms")
+                        }
+                    }
+
+                    // The loop runs at the speaker's pace, so audio waiting in the capture buffer is
+                    // delay that never shrinks by itself. It builds up at startup and after slow
+                    // stretches; skip all but one frame of it (a short jump in the sound).
+                    audioRecord?.let { record ->
+                        val unread = (capturedFrames(record, timestamp) ?: return@let) - framesRead
+                        // More than the buffer holds was already dropped by Android
+                        val overflow = unread - record.bufferSizeInFrames
+                        if (overflow > 0) {
+                            framesRead += overflow
+                            lostFrames += overflow
+                        }
+                        val waiting = unread - maxOf(overflow, 0)
+                        if (waiting > 3 * FRAME_SIZE) {
+                            val skipped =
+                                    record.read(skipBuffer, 0, (waiting - FRAME_SIZE).toInt(), AudioRecord.READ_NON_BLOCKING)
+                            if (skipped > 0) {
+                                framesRead += skipped
+                                skippedFrames += skipped
+                            }
+                        }
+                    }
                 }
 
                 if (++healthLogCounter >= HEALTH_LOG_FRAMES) {
                     healthLogCounter = 0
-                    logHealth(framesRead)
+                    logHealth(framesRead, framesWritten, lostFrames, skippedFrames)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Processing error: ${e.message}")
@@ -228,35 +270,37 @@ class AudioPipeline(private val context: Context) {
         }
     }
 
+    /** Frames captured so far, extrapolated to now, or null while capture has no timestamp yet. */
+    private fun capturedFrames(record: AudioRecord, timestamp: AudioTimestamp): Long? {
+        if (record.getTimestamp(timestamp, AudioTimestamp.TIMEBASE_MONOTONIC) != AudioRecord.SUCCESS) {
+            return null
+        }
+        return timestamp.framePosition + (System.nanoTime() - timestamp.nanoTime) * SAMPLE_RATE / 1_000_000_000
+    }
+
     /**
-     * Logs what the listener hears. Underruns: the speaker ran out of audio (a click). Lost: input
-     * dropped because the loop fell behind, which includes a little at startup (a gap if it grows).
-     * Delay: from capture to speaker; it leaves out the playing app's own path to the capture point.
+     * Logs what the listener hears. Underruns: the speaker ran out of audio (a click). Lost and
+     * skipped: input dropped by Android or by us to catch up (a short jump). Delay: from capture
+     * to speaker; it leaves out the playing app's own path to the capture point.
      */
-    private fun logHealth(framesRead: Long) {
+    private fun logHealth(framesRead: Long, framesWritten: Long, lostFrames: Long, skippedFrames: Long) {
         val track = audioTrack ?: return
         val record = audioRecord ?: return
         val played = AudioTimestamp()
-        val captured = AudioTimestamp()
-        if (!track.getTimestamp(played) ||
-                        record.getTimestamp(captured, AudioTimestamp.TIMEBASE_MONOTONIC) != AudioRecord.SUCCESS
-        ) {
-            Log.i(TAG, "Health: underruns=${track.underrunCount}")
+        val captured = capturedFrames(record, AudioTimestamp())
+        val drops = "underruns=${track.underrunCount} lost=${ms(lostFrames)} ms skipped=${ms(skippedFrames)} ms"
+        if (captured == null || !track.getTimestamp(played)) {
+            Log.i(TAG, "Health: $drops")
             return
         }
-        // Where capture and playback are right now, in frames since each started
-        val now = System.nanoTime()
-        val capturedNow = captured.framePosition + (now - captured.nanoTime) * SAMPLE_RATE / 1_000_000_000
-        val playedNow = played.framePosition + (now - played.nanoTime) * SAMPLE_RATE / 1_000_000_000
-
-        // Captured but not read yet. More than the buffer holds was dropped, not delayed.
-        val unread = capturedNow - framesRead
-        val buffered = minOf(unread, record.bufferSizeInFrames.toLong())
-        // Every frame read is written, one hop late because of the STFT
-        val delay = buffered + (framesRead - playedNow) + FRAME_SIZE
+        val playedNow = played.framePosition + (System.nanoTime() - played.nanoTime) * SAMPLE_RATE / 1_000_000_000
+        val input = captured - framesRead // waiting to be read
+        val output = framesWritten - playedNow // written, not yet played
+        // The STFT adds one hop between reading a sample and writing it
         Log.i(
                 TAG,
-                "Health: underruns=${track.underrunCount} lost=${ms(unread - buffered)} ms delay=${ms(delay)} ms"
+                "Health: $drops delay=${ms(input + FRAME_SIZE + output)} ms " +
+                        "(input ${ms(input)}, output ${ms(output)}) buffer=${ms(track.bufferSizeInFrames.toLong())} ms"
         )
     }
 
