@@ -41,13 +41,27 @@ class AudioCaptureService : Service() {
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
         private const val VOLUME_STEP = 0.1f // 10% per tap
+        private const val PREFS = "poise"
+        private const val KEY_MUSIC_MUTED = "music_muted_by_poise"
+
+        /**
+         * Unmutes media if Poise muted it. The flag is on disk, so this also repairs a mute left
+         * behind when the process was killed before it could stop cleanly.
+         */
+        fun restoreSystemAudio(context: Context) {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            if (!prefs.getBoolean(KEY_MUSIC_MUTED, false)) return
+            context.getSystemService(AudioManager::class.java)
+                    .adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+            prefs.edit().putBoolean(KEY_MUSIC_MUTED, false).commit()
+            Log.i(TAG, "STREAM_MUSIC unmuted")
+        }
     }
 
     private var audioPipeline: AudioPipeline? = null
     private var mediaProjection: MediaProjection? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
-    private var originalMusicVolume: Int? = null // null = we have not muted anything
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var notificationJob: Job? = null
 
@@ -188,7 +202,7 @@ class AudioCaptureService : Service() {
         AudioServiceState.reset()
 
         // Restore system volume
-        restoreSystemAudio()
+        restoreSystemAudio(this)
 
         // Abandon audio focus
         abandonAudioFocus()
@@ -260,22 +274,15 @@ class AudioCaptureService : Service() {
     }
 
     private fun muteSystemAudio() {
-        audioManager?.let { am ->
-            if (originalMusicVolume == null) {
-                originalMusicVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-            }
-            am.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
-            Log.i(TAG, "STREAM_MUSIC muted (was: $originalMusicVolume)")
-        }
-    }
-
-    private fun restoreSystemAudio() {
-        val volume = originalMusicVolume ?: return
-        audioManager?.let { am ->
-            am.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0)
-            Log.i(TAG, "STREAM_MUSIC restored to: $volume")
-        }
-        originalMusicVolume = null
+        val am = audioManager ?: return
+        // Mute, not volume 0: a mute covers every output (speaker, headphones, Bluetooth) and keeps
+        // each output's own volume, so switching output mid-session cannot bring the original back.
+        // Media the user muted themselves stays theirs, and we leave it muted at stop.
+        if (am.isStreamMute(AudioManager.STREAM_MUSIC)) return
+        // Written before muting, so a crash in between still gets repaired
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_MUSIC_MUTED, true).commit()
+        am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+        Log.i(TAG, "STREAM_MUSIC muted")
     }
 
     private fun createNotificationChannel() {

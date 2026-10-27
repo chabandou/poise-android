@@ -34,7 +34,7 @@ wait_log() {
     { echo "timed out waiting for: $2" >&2; return 1; }
 }
 
-volume() { adb shell dumpsys audio | grep -A8 'STREAM_MUSIC:' | grep -m1 Current; }
+volume() { adb shell dumpsys audio | grep -A8 'STREAM_MUSIC:' | grep -m2 -E 'Muted|Current' | tr -s ' ' | paste -sd' '; }
 
 case "${1:-}" in
   build)   ./gradlew assembleDebug -q --console=plain ;;
@@ -61,7 +61,9 @@ case "${1:-}" in
     adb shell input keyevent KEYCODE_MEDIA_PAUSE
     since=$(now); tap_main
     wait_log "$since" 'Service destroyed|FATAL' ;;
-  metrics) adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 1; ui | grep -o 'text="[^"]\+"' | sed 's/text=//' | tr '\n' ' '; echo ;;
+  metrics)
+    adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 1; ui | grep -o 'text="[^"]\+"' | sed 's/text=//' | tr '\n' ' '; echo
+    adb logcat -d -s AudioPipeline | grep -o 'Health: .*' | tail -1 ;;
   logs)    adb logcat -b main,crash -s $TAGS ;;
   check)
     echo "crashes:"; adb logcat -d -b crash | grep -E "$PKG|FATAL|signal" || echo "  none"

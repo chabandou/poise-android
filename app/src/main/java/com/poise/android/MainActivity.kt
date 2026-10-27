@@ -64,6 +64,10 @@ class MainActivity : ComponentActivity() {
                 navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
+        // Repairs a media mute left by a crash. Skipped while a session runs, which owns the mute.
+        if (!AudioServiceState.isRunning.value && !AudioServiceState.isStarting.value) {
+            AudioCaptureService.restoreSystemAudio(this)
+        }
 
         setContent {
             PoiseAndroidTheme {

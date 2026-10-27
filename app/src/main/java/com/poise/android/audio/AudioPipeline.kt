@@ -3,8 +3,10 @@ package com.poise.android.audio
 import android.content.Context
 import android.media.*
 import android.media.projection.MediaProjection
+import android.os.Process
 import android.util.Log
 import com.poise.android.service.AudioServiceState
+import java.util.concurrent.Executors
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +30,8 @@ class AudioPipeline(private val context: Context) {
 
         // At least 40 ms of float samples
         private const val MIN_BUFFER_BYTES = SAMPLE_RATE / 25 * Float.SIZE_BYTES
+
+        private const val HEALTH_LOG_FRAMES = SAMPLE_RATE * 5 / FRAME_SIZE // every ~5 s
     }
 
     private var audioRecord: AudioRecord? = null
@@ -57,8 +61,22 @@ class AudioPipeline(private val context: Context) {
 
         mediaProjection = projection
 
+        // Each frame must be done within 16 ms, so the loop gets its own thread at audio priority
+        // instead of sharing the IO pool at normal priority.
+        val audioThread =
+                Executors.newSingleThreadExecutor { task ->
+                            Thread(
+                                    {
+                                        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
+                                        task.run()
+                                    },
+                                    "PoiseAudio"
+                            )
+                        }
+                        .asCoroutineDispatcher()
+
         processingJob =
-                CoroutineScope(Dispatchers.IO).launch {
+                CoroutineScope(audioThread).launch {
                     try {
                         gtcrnProcessor = GTCRNProcessor(context)
 
@@ -78,6 +96,7 @@ class AudioPipeline(private val context: Context) {
                         started.completeExceptionally(e)
                     } finally {
                         release()
+                        audioThread.close() // lets the thread end once this job finishes
                     }
                 }
         return started
@@ -159,6 +178,8 @@ class AudioPipeline(private val context: Context) {
         val readSize = FRAME_SIZE
         val inputBuffer = FloatArray(readSize)
         var statsUpdateCounter = 0
+        var healthLogCounter = 0
+        var framesRead = 0L
 
         while (_isRunning.value && currentCoroutineContext().isActive) {
             try {
@@ -176,6 +197,7 @@ class AudioPipeline(private val context: Context) {
                 if (readResult < readSize) {
                     continue // Not enough samples
                 }
+                framesRead += readSize
 
                 val outputAudio = gtcrnProcessor?.processFrame(inputBuffer)
 
@@ -195,11 +217,50 @@ class AudioPipeline(private val context: Context) {
                     statsUpdateCounter = 0
                     gtcrnProcessor?.getStats()?.let { AudioServiceState.updateStats(it) }
                 }
+
+                if (++healthLogCounter >= HEALTH_LOG_FRAMES) {
+                    healthLogCounter = 0
+                    logHealth(framesRead)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Processing error: ${e.message}")
             }
         }
     }
+
+    /**
+     * Logs what the listener hears. Underruns: the speaker ran out of audio (a click). Lost: input
+     * dropped because the loop fell behind, which includes a little at startup (a gap if it grows).
+     * Delay: from capture to speaker; it leaves out the playing app's own path to the capture point.
+     */
+    private fun logHealth(framesRead: Long) {
+        val track = audioTrack ?: return
+        val record = audioRecord ?: return
+        val played = AudioTimestamp()
+        val captured = AudioTimestamp()
+        if (!track.getTimestamp(played) ||
+                        record.getTimestamp(captured, AudioTimestamp.TIMEBASE_MONOTONIC) != AudioRecord.SUCCESS
+        ) {
+            Log.i(TAG, "Health: underruns=${track.underrunCount}")
+            return
+        }
+        // Where capture and playback are right now, in frames since each started
+        val now = System.nanoTime()
+        val capturedNow = captured.framePosition + (now - captured.nanoTime) * SAMPLE_RATE / 1_000_000_000
+        val playedNow = played.framePosition + (now - played.nanoTime) * SAMPLE_RATE / 1_000_000_000
+
+        // Captured but not read yet. More than the buffer holds was dropped, not delayed.
+        val unread = capturedNow - framesRead
+        val buffered = minOf(unread, record.bufferSizeInFrames.toLong())
+        // Every frame read is written, one hop late because of the STFT
+        val delay = buffered + (framesRead - playedNow) + FRAME_SIZE
+        Log.i(
+                TAG,
+                "Health: underruns=${track.underrunCount} lost=${ms(unread - buffered)} ms delay=${ms(delay)} ms"
+        )
+    }
+
+    private fun ms(frames: Long) = frames * 1000 / SAMPLE_RATE
 
     /** Stop audio capture and processing. The background job releases its resources as it ends. */
     fun stop() {
