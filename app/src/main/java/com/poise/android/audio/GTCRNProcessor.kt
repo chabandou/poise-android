@@ -4,7 +4,6 @@ import ai.onnxruntime.*
 import android.content.Context
 import android.util.Log
 import java.io.File
-import java.io.FileOutputStream
 
 /**
  * GTCRN (Gated Temporal Convolutional Recurrent Network) processor for speech denoising.
@@ -93,14 +92,10 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     private fun loadModel(context: Context) {
         ortEnv = OrtEnvironment.getEnvironment()
 
-        // Copy model from assets to internal storage
-        val modelFile = File(context.filesDir, ONNX_MODEL_NAME)
-        if (!modelFile.exists()) {
-            context.assets.open(ONNX_MODEL_NAME).use { input ->
-                FileOutputStream(modelFile).use { output -> input.copyTo(output) }
-            }
-            Log.i(TAG, "Model copied to: ${modelFile.absolutePath}")
-        }
+        // Load straight from the APK, so an app update always brings its own model.
+        // Older versions cached a copy in filesDir that never updated; remove it.
+        val modelBytes = context.assets.open(ONNX_MODEL_NAME).use { it.readBytes() }
+        File(context.filesDir, ONNX_MODEL_NAME).delete()
 
         // Create optimized session options
         val sessionOptions =
@@ -131,8 +126,8 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                     }
                 }
 
-        ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
-        Log.i(TAG, "GTCRN ONNX model loaded (${modelFile.length() / 1024} KB)")
+        ortSession = ortEnv?.createSession(modelBytes, sessionOptions)
+        Log.i(TAG, "GTCRN ONNX model loaded (${modelBytes.size / 1024} KB)")
     }
 
     // Pre-allocated input/output name arrays
@@ -161,40 +156,46 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                     inputFrame.copyOfRange(0, FRAME_SIZE)
                 }
 
-        // VAD check
-        if (!checkVAD(frame)) {
-            vadBypassed++
-            frameCount++
-            return frame // Pass through silent audio
-        }
+        // VAD check: quiet frames skip only the model. They still go through STFT and iSTFT, so
+        // the output delay and overlap-add state stay the same when sound comes back.
+        val isActive = checkVAD(frame)
+        if (!isActive) vadBypassed++
+        frameCount++
 
         return try {
             // 1. Compute STFT (native) -> 514 floats (257 real + 257 imag)
             val stftResult = nativeComputeSTFT(stftHandle, frame) ?: return frame
 
-            // 2. Prepare ONNX input: reshape to [1, 257, 1, 2] in pre-allocated buffer
-            prepareOnnxInput(stftResult)
+            val enhancedStft =
+                    if (isActive) {
+                        // 2. Prepare ONNX input: reshape to [1, 257, 1, 2] in pre-allocated buffer
+                        prepareOnnxInput(stftResult)
 
-            // 3. Run ONNX inference (uses pre-allocated buffers)
-            val startTime = System.nanoTime()
-            val enhancedStft = runOnnxInference() ?: return frame
-            val inferenceMs = (System.nanoTime() - startTime) / 1_000_000.0
-            totalInferenceTimeMs += inferenceMs
+                        // 3. Run ONNX inference (uses pre-allocated buffers)
+                        val startTime = System.nanoTime()
+                        val modelOutput = runOnnxInference()
+                        val inferenceMs = (System.nanoTime() - startTime) / 1_000_000.0
+                        totalInferenceTimeMs += inferenceMs
 
-            // Update EMA (alpha = 0.1 means 10% weight to new sample)
-            if (smoothedInferenceTimeMs == 0.0) {
-                smoothedInferenceTimeMs = inferenceMs
-            } else {
-                smoothedInferenceTimeMs = 0.9 * smoothedInferenceTimeMs + 0.1 * inferenceMs
-            }
+                        // Update EMA (alpha = 0.1 means 10% weight to new sample)
+                        if (smoothedInferenceTimeMs == 0.0) {
+                            smoothedInferenceTimeMs = inferenceMs
+                        } else {
+                            smoothedInferenceTimeMs = 0.9 * smoothedInferenceTimeMs + 0.1 * inferenceMs
+                        }
+
+                        // A failed run passes the spectrum through, keeping the same delay
+                        modelOutput ?: stftResult
+                    } else {
+                        stftResult
+                    }
 
             // 4. Reconstruct audio (native iSTFT with overlap-add)
             val enhanced = nativeReconstruct(stftHandle, enhancedStft)
 
-            frameCount++
-
-            // Post-process
-            postProcess(enhanced ?: frame)
+            // No per-frame limiter or DC removal: a different gain or offset per 16 ms frame buzzes.
+            // AudioPipeline clamps each sample after volume.
+            enhanced ?: frame
         } catch (e: Exception) {
             Log.e(TAG, "processFrame error: ${e.message}", e)
             frame
@@ -295,40 +296,6 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
             Log.e(TAG, "ONNX inference error: ${e.message}", e)
             null
         }
-    }
-
-    private fun postProcess(audio: FloatArray): FloatArray {
-        if (audio.isEmpty()) return audio
-
-        // Soft limiter
-        var maxVal = 0f
-        for (sample in audio) {
-            val abs = kotlin.math.abs(sample)
-            if (abs > maxVal) maxVal = abs
-        }
-        if (maxVal > 0.98f) {
-            val scale = 0.98f / maxVal
-            for (i in audio.indices) {
-                audio[i] *= scale
-            }
-        }
-
-        // Clip
-        for (i in audio.indices) {
-            audio[i] = audio[i].coerceIn(-1f, 1f)
-        }
-
-        // DC removal
-        var mean = 0f
-        for (sample in audio) {
-            mean += sample
-        }
-        mean /= audio.size
-        for (i in audio.indices) {
-            audio[i] -= mean
-        }
-
-        return audio
     }
 
     /** Get processing statistics. */

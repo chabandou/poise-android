@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
                 if (result.resultCode == Activity.RESULT_OK && result.data != null) {
                     startAudioCaptureService(result.resultCode, result.data!!)
                 } else {
+                    AudioServiceState.setStarting(false)
                     Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity() {
                 if (isGranted && pendingStart) {
                     requestMediaProjection()
                 } else if (!isGranted) {
+                    AudioServiceState.setStarting(false)
                     Toast.makeText(this, "Audio permission required", Toast.LENGTH_SHORT).show()
                 }
                 pendingStart = false

@@ -10,7 +10,9 @@ import android.media.AudioManager
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.poise.android.MainActivity
@@ -19,6 +21,7 @@ import com.poise.android.audio.AudioPipeline
 import com.poise.android.audio.ProcessingStats
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 
 /**
  * Foreground service for audio capture and processing. Required for MediaProjection to keep running
@@ -50,7 +53,7 @@ class AudioCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
-    private var originalMusicVolume: Int = 0
+    private var originalMusicVolume: Int? = null // null = we have not muted anything
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
@@ -130,6 +133,20 @@ class AudioCaptureService : Service() {
             return
         }
 
+        // The user can end casting from the system UI; clean up as if Stop was tapped.
+        // Our own stop() also triggers this, by which point audioPipeline is already null.
+        mediaProjection?.registerCallback(
+                object : MediaProjection.Callback() {
+                    override fun onStop() {
+                        if (audioPipeline != null) {
+                            Log.i(TAG, "Projection stopped by the system")
+                            stopCapture()
+                        }
+                    }
+                },
+                Handler(Looper.getMainLooper())
+        )
+
         // Request audio focus to make other apps duck/pause
         requestAudioFocus()
 
@@ -137,16 +154,29 @@ class AudioCaptureService : Service() {
         muteSystemAudio()
 
         // Start audio pipeline
-        audioPipeline = AudioPipeline(this)
-        serviceScope.launch {
+        val pipeline = AudioPipeline(this)
+        audioPipeline = pipeline
+        val started = pipeline.start(mediaProjection!!)
+        serviceScope.launch(Dispatchers.Main) {
             try {
-                audioPipeline?.start(mediaProjection!!)
+                started.await()
+                // Stop may have been tapped while starting; then this pipeline is already gone.
+                if (audioPipeline !== pipeline) return@launch
                 AudioServiceState.setRunning(true) // Update shared state
                 Log.i(TAG, "Audio capture started")
+
+                // The loop can also end by itself (e.g. capture died); then stop the service too.
+                pipeline.isRunning.first { !it }
+                if (audioPipeline === pipeline) {
+                    Log.w(TAG, "Pipeline ended on its own")
+                    stopCapture()
+                }
+            } catch (e: CancellationException) {
+                throw e // service destroyed; onDestroy already cleaned up
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start audio pipeline: ${e.message}")
                 AudioServiceState.reset() // Reset state on failure
-                withContext(Dispatchers.Main) { stopCapture() }
+                stopCapture()
             }
         }
     }
@@ -225,17 +255,21 @@ class AudioCaptureService : Service() {
 
     private fun muteSystemAudio() {
         audioManager?.let { am ->
-            originalMusicVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+            if (originalMusicVolume == null) {
+                originalMusicVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+            }
             am.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
             Log.i(TAG, "STREAM_MUSIC muted (was: $originalMusicVolume)")
         }
     }
 
     private fun restoreSystemAudio() {
+        val volume = originalMusicVolume ?: return
         audioManager?.let { am ->
-            am.setStreamVolume(AudioManager.STREAM_MUSIC, originalMusicVolume, 0)
-            Log.i(TAG, "STREAM_MUSIC restored to: $originalMusicVolume")
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, volume, 0)
+            Log.i(TAG, "STREAM_MUSIC restored to: $volume")
         }
+        originalMusicVolume = null
     }
 
     private fun createNotificationChannel() {
