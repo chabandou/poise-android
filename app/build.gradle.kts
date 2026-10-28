@@ -24,7 +24,7 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
-                // Static: poise_native is the only library that uses it (ORT carries its own)
+                // Static: poise_native is the app's only native library
                 arguments += "-DANDROID_STL=c++_static"
             }
         }
@@ -94,10 +94,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    
-    // ONNX Runtime for Android
-    // Built by scripts/build-ort.sh with only the model's operators (2.3 MB instead of 14.6 MB)
-    implementation(files("libs/onnxruntime-poise-1.16.3.aar"))
     
     // Coroutines for async audio processing
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

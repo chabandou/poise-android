@@ -1,10 +1,10 @@
 /**
  * JNI Bridge - Native C++ to Kotlin Interface
  *
- * STFT/iSTFT for GTCRNProcessor. ONNX inference is handled on the Kotlin side
- * with the onnxruntime-android AAR package.
+ * STFT/iSTFT and the GTCRN model (gtcrn.cpp) for GTCRNProcessor.
  */
 
+#include "gtcrn.h"
 #include "stft.h"
 #include <android/log.h>
 #include <jni.h>
@@ -138,6 +138,44 @@ Java_com_poise_android_audio_GTCRNProcessor_nativeSTFTDestroy(JNIEnv *env,
 
   stftProcessors.erase(handle);
   LOGI("STFT processor %lld destroyed", handle);
+}
+
+/** Loads the model from the bytes of assets/gtcrn.weights; 0 if they don't fit the code. */
+JNIEXPORT jlong JNICALL
+Java_com_poise_android_audio_GTCRNProcessor_nativeModelInit(JNIEnv *env, jobject thiz,
+                                                            jbyteArray weights) {
+  jbyte *bytes = env->GetByteArrayElements(weights, nullptr);
+  Gtcrn *model = gtcrn_create(bytes, env->GetArrayLength(weights));
+  env->ReleaseByteArrayElements(weights, bytes, JNI_ABORT);
+  if (!model) LOGE("gtcrn.weights doesn't match the model code");
+  return reinterpret_cast<jlong>(model);
+}
+
+/** spectrum and result: 257 real parts, then 257 imaginary parts. */
+JNIEXPORT void JNICALL Java_com_poise_android_audio_GTCRNProcessor_nativeModelRun(
+    JNIEnv *env, jobject thiz, jlong handle, jfloatArray spectrum, jfloatArray result) {
+  float planar[514], mix[514], enh[514];
+  env->GetFloatArrayRegion(spectrum, 0, 514, planar);
+  for (int k = 0; k < 257; k++) {
+    mix[2 * k] = planar[k];
+    mix[2 * k + 1] = planar[257 + k];
+  }
+  gtcrn_run(reinterpret_cast<Gtcrn *>(handle), mix, enh);
+  for (int k = 0; k < 257; k++) {
+    planar[k] = enh[2 * k];
+    planar[257 + k] = enh[2 * k + 1];
+  }
+  env->SetFloatArrayRegion(result, 0, 514, planar);
+}
+
+JNIEXPORT void JNICALL Java_com_poise_android_audio_GTCRNProcessor_nativeModelReset(
+    JNIEnv *env, jobject thiz, jlong handle) {
+  gtcrn_reset(reinterpret_cast<Gtcrn *>(handle));
+}
+
+JNIEXPORT void JNICALL Java_com_poise_android_audio_GTCRNProcessor_nativeModelDestroy(
+    JNIEnv *env, jobject thiz, jlong handle) {
+  gtcrn_destroy(reinterpret_cast<Gtcrn *>(handle));
 }
 
 } // extern "C"

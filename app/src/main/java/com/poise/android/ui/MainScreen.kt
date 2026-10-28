@@ -1030,7 +1030,7 @@ private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Un
         Text("Voice isolation, 100% on-device", color = pal.ink, fontSize = 14.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(10.dp))
         Text(
-                "Denoising: GTCRN (Rong et al., 2024)\nBuilt with Kotlin and ONNX Runtime",
+                "Denoising: GTCRN (Rong et al., 2024)\nBuilt with Kotlin and C++",
                 color = pal.muted,
                 fontSize = 13.sp,
                 lineHeight = 22.sp,

@@ -1,19 +1,15 @@
 package com.poise.android.audio
 
-import ai.onnxruntime.*
 import android.content.Context
 import android.util.Log
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.FloatBuffer
 
 /**
  * GTCRN (Gated Temporal Convolutional Recurrent Network) processor for speech denoising.
  *
  * This is a lightweight alternative to the DeepFilterNet model with:
  * - 0.25 MB model size (vs ~10 MB)
- * - Spectrogram-based processing (STFT -> ONNX -> iSTFT)
+ * - Spectrogram-based processing (STFT -> model -> iSTFT), all native
  * - State caching for real-time streaming
  * - Expected RTF < 1.0 on mobile devices
  */
@@ -21,10 +17,10 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
 
     companion object {
         private const val TAG = "GTCRNProcessor"
-        // models/gtcrn.onnx in ORT format, which is all the app's minimal ONNX Runtime loads.
-        // scripts/build-ort.sh makes both. The .onnx is the desktop app's rewrite of upstream's
-        // streaming export (poise-voice-isolator tools/optimize_gtcrn.py), unused opsets stripped.
-        private const val ONNX_MODEL_NAME = "gtcrn.ort"
+        // The weights of models/gtcrn.onnx for the model code in gtcrn.cpp, written by
+        // scripts/native-gtcrn.py. The .onnx is the desktop app's rewrite of upstream's streaming
+        // export (poise-voice-isolator tools/optimize_gtcrn.py).
+        private const val WEIGHTS_NAME = "gtcrn.weights"
 
         // Audio parameters
         const val FRAME_SIZE = 256 // hop_length (samples per frame)
@@ -36,17 +32,6 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         // are. Otherwise a steady hiss the model removes during speech comes back in every pause.
         const val BYPASS_GAIN = 0.1f
 
-        // Cache sizes (from model analysis)
-        private const val CONV_CACHE_SIZE = 2 * 1 * 16 * 16 * 33 // 16,896
-        private const val TRA_CACHE_SIZE = 2 * 3 * 1 * 1 * 16 // 96
-        private const val INTER_CACHE_SIZE = 2 * 1 * 33 * 16 // 1,056
-
-        // Pre-allocated constant shapes for ONNX tensors
-        private val MIX_SHAPE = longArrayOf(1, 257, 1, 2)
-        private val CONV_SHAPE = longArrayOf(2, 1, 16, 16, 33)
-        private val TRA_SHAPE = longArrayOf(2, 3, 1, 1, 16)
-        private val INTER_SHAPE = longArrayOf(2, 1, 33, 16)
-
         init {
             System.loadLibrary("poise_native")
         }
@@ -55,18 +40,8 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     // Native STFT processor handle
     private var stftHandle: Long = 0
 
-    // ONNX session
-    private var ortSession: OrtSession? = null
-    private var ortEnv: OrtEnvironment? = null
-
-    // Model inputs live in direct buffers, which ONNX Runtime reads in place. So the input tensors
-    // are created once and each frame only rewrites these buffers. (MUST be before init block)
-    private val mixInput = directFloats(NUM_BINS * 2)
-    // State caches (persisted between frames)
-    private val convCache = directFloats(CONV_CACHE_SIZE)
-    private val traCache = directFloats(TRA_CACHE_SIZE)
-    private val interCache = directFloats(INTER_CACHE_SIZE)
-    private var inputs: Map<String, OnnxTensor> = emptyMap()
+    // Native model handle; the model keeps its state from frame to frame
+    private var modelHandle: Long = 0
 
     private val stftOutputBuffer = FloatArray(NUM_BINS * 2)
 
@@ -94,7 +69,6 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
             stftHandle = nativeSTFTInit()
             Log.i(TAG, "STFT processor initialized, handle=$stftHandle")
 
-            // Load ONNX model
             loadModel(context)
 
             Log.i(TAG, "GTCRNProcessor initialized")
@@ -108,43 +82,14 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     }
 
     private fun loadModel(context: Context) {
-        ortEnv = OrtEnvironment.getEnvironment()
-
         // Load straight from the APK, so an app update always brings its own model.
         // Older versions cached a copy in filesDir that never updated; remove it.
-        val modelBytes = context.assets.open(ONNX_MODEL_NAME).use { it.readBytes() }
+        val weights = context.assets.open(WEIGHTS_NAME).use { it.readBytes() }
         File(context.filesDir, "gtcrn.onnx").delete()
-
-        // Create optimized session options
-        val sessionOptions =
-                OrtSession.SessionOptions().apply {
-                    // Single thread is faster for small models (less overhead)
-                    setIntraOpNumThreads(1)
-                    setInterOpNumThreads(1)
-
-                    // Maximum optimization
-                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-
-                    // Enable memory pattern optimization
-                    setMemoryPatternOptimization(true)
-
-                    // CPU only: the minimal runtime has no XNNPACK or NNAPI
-                }
-
-        val env = ortEnv!!
-        ortSession = env.createSession(modelBytes, sessionOptions)
-        inputs =
-                mapOf(
-                        "mix" to OnnxTensor.createTensor(env, mixInput, MIX_SHAPE),
-                        "conv_cache" to OnnxTensor.createTensor(env, convCache, CONV_SHAPE),
-                        "tra_cache" to OnnxTensor.createTensor(env, traCache, TRA_SHAPE),
-                        "inter_cache" to OnnxTensor.createTensor(env, interCache, INTER_SHAPE)
-                )
-        Log.i(TAG, "GTCRN ONNX model loaded (${modelBytes.size / 1024} KB)")
+        modelHandle = nativeModelInit(weights)
+        check(modelHandle != 0L) { "$WEIGHTS_NAME doesn't match the model code" }
+        Log.i(TAG, "GTCRN model loaded (${weights.size / 1024} KB)")
     }
-
-    private fun directFloats(size: Int): FloatBuffer =
-            ByteBuffer.allocateDirect(size * Float.SIZE_BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer()
 
     /**
      * Process a single audio frame through the GTCRN pipeline.
@@ -153,7 +98,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
      * @return Enhanced audio samples (256 samples)
      */
     fun processFrame(inputFrame: FloatArray): FloatArray? {
-        if (ortSession == null || stftHandle == 0L) {
+        if (modelHandle == 0L || stftHandle == 0L) {
             Log.e(TAG, "Processor not initialized")
             return inputFrame
         }
@@ -179,12 +124,10 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
 
             val enhancedStft =
                     if (isActive) {
-                        // 2. Prepare ONNX input: reshape to [1, 257, 1, 2] in pre-allocated buffer
-                        prepareOnnxInput(stftResult)
-
-                        // 3. Run ONNX inference (uses pre-allocated buffers)
+                        // 2. Run the model
                         val startTime = System.nanoTime()
-                        val modelOutput = runOnnxInference()
+                        val modelOutput = stftOutputBuffer
+                        nativeModelRun(modelHandle, stftResult, modelOutput)
                         val inferenceMs = (System.nanoTime() - startTime) / 1_000_000.0
 
                         // Update EMA (alpha = 0.1 means 10% weight to new sample)
@@ -194,24 +137,19 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
                             smoothedInferenceTimeMs = 0.9 * smoothedInferenceTimeMs + 0.1 * inferenceMs
                         }
 
-                        // A failed run passes the spectrum through, keeping the same delay
-                        if (modelOutput == null) {
-                            stftResult
-                        } else {
-                            // Mixed per bin before the iSTFT, so input and output line up
-                            if (residualGain > 0f) {
-                                for (i in modelOutput.indices) {
-                                    modelOutput[i] += residualGain * (stftResult[i] - modelOutput[i])
-                                }
+                        // Mixed per bin before the iSTFT, so input and output line up
+                        if (residualGain > 0f) {
+                            for (i in modelOutput.indices) {
+                                modelOutput[i] += residualGain * (stftResult[i] - modelOutput[i])
                             }
-                            modelOutput
                         }
+                        modelOutput
                     } else {
                         for (i in stftResult.indices) stftResult[i] *= BYPASS_GAIN
                         stftResult
                     }
 
-            // 4. Reconstruct audio (native iSTFT with overlap-add)
+            // 3. Reconstruct audio (native iSTFT with overlap-add)
             val enhanced = nativeReconstruct(stftHandle, enhancedStft)
 
             // No per-frame limiter or DC removal: a different gain or offset per 16 ms frame buzzes.
@@ -242,46 +180,6 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         }
     }
 
-    private fun prepareOnnxInput(stftResult: FloatArray) {
-        // stftResult: [257 real, 257 imag] = 514 floats
-        // Reshape to [1, 257, 1, 2] in mixInput (reused)
-        // The ONNX model expects: [batch, freq_bins, time_frames, real_imag]
-        for (i in 0 until NUM_BINS) {
-            mixInput.put(i * 2, stftResult[i]) // real at even indices
-            mixInput.put(i * 2 + 1, stftResult[i + NUM_BINS]) // imag at odd indices
-        }
-    }
-
-    private fun runOnnxInference(): FloatArray? {
-        val session = ortSession ?: return null
-
-        return try {
-            session.run(inputs).use { results ->
-                // Carry the model's state to the next frame
-                copyOutput(results, "conv_cache_out", convCache)
-                copyOutput(results, "tra_cache_out", traCache)
-                copyOutput(results, "inter_cache_out", interCache)
-
-                // Convert from [1, 257, 1, 2] back to [257 real, 257 imag] in pre-allocated buffer
-                val enh = (results.get("enh").get() as OnnxTensor).floatBuffer
-                for (i in 0 until NUM_BINS) {
-                    stftOutputBuffer[i] = enh.get(i * 2) // real
-                    stftOutputBuffer[i + NUM_BINS] = enh.get(i * 2 + 1) // imag
-                }
-            }
-            stftOutputBuffer
-        } catch (e: Exception) {
-            Log.e(TAG, "ONNX inference error: ${e.message}", e)
-            null
-        }
-    }
-
-    private fun copyOutput(results: OrtSession.Result, name: String, target: FloatBuffer) {
-        target.clear()
-        target.put((results.get(name).get() as OnnxTensor).floatBuffer)
-        target.rewind()
-    }
-
     /** Get processing statistics. */
     fun getStats(): ProcessingStats {
         val rtf =
@@ -301,9 +199,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
 
     /** Reset processor state. */
     fun reset() {
-        for (cache in listOf(convCache, traCache, interCache)) {
-            for (i in 0 until cache.capacity()) cache.put(i, 0f)
-        }
+        nativeModelReset(modelHandle)
         nativeSTFTReset(stftHandle)
         smoothedInferenceTimeMs = 0.0
         framesSinceActive = hangFrames + 1
@@ -311,12 +207,10 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     }
 
     override fun close() {
-        inputs.values.forEach { it.close() }
-        inputs = emptyMap()
-        ortSession?.close()
-        ortSession = null
-        ortEnv?.close()
-        ortEnv = null
+        if (modelHandle != 0L) {
+            nativeModelDestroy(modelHandle)
+            modelHandle = 0
+        }
         if (stftHandle != 0L) {
             nativeSTFTDestroy(stftHandle)
             stftHandle = 0
@@ -330,4 +224,8 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     private external fun nativeReconstruct(handle: Long, stftData: FloatArray): FloatArray?
     private external fun nativeSTFTReset(handle: Long)
     private external fun nativeSTFTDestroy(handle: Long)
+    private external fun nativeModelInit(weights: ByteArray): Long
+    private external fun nativeModelRun(handle: Long, spectrum: FloatArray, result: FloatArray)
+    private external fun nativeModelReset(handle: Long)
+    private external fun nativeModelDestroy(handle: Long)
 }
