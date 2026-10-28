@@ -218,6 +218,9 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         Log.i(TAG, "GTCRNProcessor closed")
     }
 
+    /** Keeps the calling thread off the slowest cores; how many it may use, 0 if none are slower, or -errno. */
+    external fun pinToFastCores(): Int
+
     // Native methods
     private external fun nativeSTFTInit(): Long
     private external fun nativeComputeSTFT(handle: Long, audioChunk: FloatArray): FloatArray?

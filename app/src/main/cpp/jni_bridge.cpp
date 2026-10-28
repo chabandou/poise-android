@@ -6,9 +6,15 @@
 
 #include "gtcrn.h"
 #include "stft.h"
+#include <algorithm>
 #include <android/log.h>
+#include <cerrno>
+#include <climits>
+#include <cstdio>
 #include <jni.h>
 #include <memory>
+#include <sched.h>
+#include <unistd.h>
 #include <mutex>
 #include <unordered_map>
 
@@ -176,6 +182,33 @@ JNIEXPORT void JNICALL Java_com_poise_android_audio_GTCRNProcessor_nativeModelRe
 JNIEXPORT void JNICALL Java_com_poise_android_audio_GTCRNProcessor_nativeModelDestroy(
     JNIEnv *env, jobject thiz, jlong handle) {
   gtcrn_destroy(reinterpret_cast<Gtcrn *>(handle));
+}
+
+/**
+ * Keeps the calling thread off the slowest cluster: on a little core a frame takes 3-4x longer, and
+ * moving between cores costs spikes of 25-31 ms. Returns how many cores it may use, 0 if all cores
+ * look alike (nothing to do), or -errno.
+ */
+JNIEXPORT jint JNICALL Java_com_poise_android_audio_GTCRNProcessor_pinToFastCores(JNIEnv *env,
+                                                                                   jobject thiz) {
+  long khz[CPU_SETSIZE] = {};
+  long slowest = LONG_MAX;
+  int cpus = std::min<long>(sysconf(_SC_NPROCESSORS_CONF), CPU_SETSIZE);
+  for (int cpu = 0; cpu < cpus; cpu++) {
+    char path[64];
+    snprintf(path, sizeof path, "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", cpu);
+    if (FILE *f = fopen(path, "r")) {
+      if (fscanf(f, "%ld", &khz[cpu]) == 1 && khz[cpu] > 0) slowest = std::min(slowest, khz[cpu]);
+      fclose(f);
+    }
+  }
+  cpu_set_t fast;
+  CPU_ZERO(&fast);
+  for (int cpu = 0; cpu < cpus; cpu++)
+    if (khz[cpu] > slowest) CPU_SET(cpu, &fast);
+  if (CPU_COUNT(&fast) == 0) return 0;
+  // 0 is this thread: affinity is per thread on Linux
+  return sched_setaffinity(0, sizeof fast, &fast) == 0 ? CPU_COUNT(&fast) : -errno;
 }
 
 } // extern "C"

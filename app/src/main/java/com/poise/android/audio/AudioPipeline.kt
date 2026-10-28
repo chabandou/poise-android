@@ -216,6 +216,7 @@ class AudioPipeline(private val context: Context) {
         var lostFrames = 0L
         var skippedFrames = 0L
         applySettings()
+        Log.i(TAG, "Audio thread pinned: ${gtcrnProcessor?.pinToFastCores()} fast cores")
 
         while (_isRunning.value && currentCoroutineContext().isActive) {
             try {
@@ -255,6 +256,9 @@ class AudioPipeline(private val context: Context) {
                     statsUpdateCounter = 0
                     gtcrnProcessor?.getStats()?.let { AudioServiceState.updateStats(it) }
                     applySettings()
+                    // Again, since Android moving the app between foreground and background can
+                    // reset it (older kernels do when changing a thread's cpuset)
+                    gtcrnProcessor?.pinToFastCores()
 
                     val autoStopMinutes = PoiseSettings.autoStopMinutes.value
                     val quietFrames = gtcrnProcessor?.framesSinceActive ?: 0
