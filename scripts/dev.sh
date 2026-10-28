@@ -40,7 +40,12 @@ case "${1:-}" in
   build)   ./gradlew assembleDebug -q --console=plain ;;
   install) "$0" build && adb install -r app/build/outputs/apk/debug/app-debug.apk ;;
   bench)   ./gradlew assembleBenchmark -q --console=plain && adb install -r app/build/outputs/apk/benchmark/app-benchmark.apk ;;
-  test)    ./gradlew connectedDebugAndroidTest --console=plain 2>&1 | grep -E "Starting|FAILED|Error|expected|Tests on|BUILD" ;;
+  test)
+    # Installed and run by hand: connectedAndroidTest uninstalls the app afterwards, wiping its settings
+    ./gradlew assembleDebug assembleDebugAndroidTest -q --console=plain
+    adb install -r app/build/outputs/apk/debug/app-debug.apk >/dev/null
+    adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk >/dev/null
+    adb shell am instrument -w $PKG.test/androidx.test.runner.AndroidJUnitRunner | grep -E "FAILURES|OK \(|expected|Error|Process crashed" ;;
   start)
     adb logcat -c; since=$(now)
     tap_main; sleep 1
