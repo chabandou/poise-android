@@ -119,7 +119,7 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
     }
 
     Popup(popupPositionProvider = provider, onDismissRequest = ::close, properties = PopupProperties(focusable = true)) {
-        val panelShape = RoundedCornerShape(16.dp)
+        val panelShape = RoundedCornerShape(10.dp)
         Column(
                 Modifier.padding(ROOM)
                         .width(200.dp)
@@ -149,7 +149,7 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
                 val fill = lerp(base, lerp(base, pal.secondary, 0.08f), max(check, 0.45f * press))
                 val edge = lerp(pal.line, pal.secondary.copy(alpha = 0.6f), press)
                 val text by animateColorAsState(if (i == checked) pal.ink else pal.muted, tween(SWITCH_MS), label = "cardText")
-                val shape = RoundedCornerShape(12.dp)
+                val shape = RoundedCornerShape(6.dp)
                 Box(
                         Modifier.fillMaxWidth()
                                 .pressScale(source, 0.97f)

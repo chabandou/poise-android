@@ -348,7 +348,7 @@ private fun Title(text: String, modifier: Modifier = Modifier, size: Int = 34) {
 }
 
 /** A bordered panel, as used for every card. */
-private fun Modifier.panel(radius: Dp = 20.dp) = composed {
+private fun Modifier.panel(radius: Dp = 12.dp) = composed {
     val pal = LocalPalette.current
     val shape = RoundedCornerShape(radius)
     clip(shape).background(pal.panel).border(1.dp, pal.line, shape)
@@ -591,7 +591,7 @@ private fun ColumnScope.HomePage(
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
     ) {
         Box(
-                Modifier.fillMaxWidth().weight(1f, fill = false).height(452.dp).panel(24.dp)
+                Modifier.fillMaxWidth().weight(1f, fill = false).height(452.dp).panel(14.dp)
                         .onGloballyPositioned { coords[0] = it; place() }
         ) {
             Lattice({ latticeColor }, motion, { pingOrigin }, Modifier.matchParentSize())
@@ -899,14 +899,14 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
             },
             markerOn = on
     ) {
-        val shape = RoundedCornerShape(8.dp)
+        val shape = RoundedCornerShape(6.dp)
         // 5 dp all round (border included), so the knob sits centred at either end
         Box(Modifier.size(50.dp, 28.dp).background(wash, shape).border(1.dp, track, shape).padding(5.dp)) {
             // The knob stretches toward where it is going while pressed
             Box(
                     Modifier.offset(x = knobX - if (checked) stretch else 0.dp)
                             .size(18.dp + stretch, 18.dp)
-                            .background(track, RoundedCornerShape(5.dp))
+                            .background(track, RoundedCornerShape(3.dp))
             )
         }
     }
@@ -916,7 +916,7 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
 private fun SmallButton(text: String, icon: String, onClick: () -> Unit, armed: Boolean = false) {
     val pal = LocalPalette.current
     val buzz = rememberBuzz()
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(7.dp)
     val source = remember { MutableInteractionSource() }
     // Armed (waiting for a second tap), it fills with gold and its label takes the deep background colour
     val fill by animateColorAsState(if (armed) pal.secondary else Color.Transparent, tween(260), label = "buttonFill")
@@ -1012,7 +1012,7 @@ private fun ColumnScope.SettingsPage(
                     val slot = Size((size.width - (THEME_COLUMNS - 1) * gap) / THEME_COLUMNS, (size.height - (rows.size - 1) * gap) / rows.size)
                     val k = 1f - 0.12f * glideDip(ringAt.velocity)
                     val w = 2.dp.toPx()
-                    val r = 12.dp.toPx() * k
+                    val r = 8.dp.toPx() * k
                     val ring = Size(slot.width * k - w, slot.height * k - w)
                     drawRoundRect(
                             pal.secondary,
@@ -1101,7 +1101,7 @@ private fun ColumnScope.SettingsPage(
 private fun ThemeTile(name: String, panel: Color, accent: Color, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val pal = LocalPalette.current
     val source = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(8.dp)
     val dot = remember { Animatable(1f) }
     LaunchedEffect(on) {
         if (on) {
@@ -1171,7 +1171,7 @@ private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Un
 private fun LinkButton(text: String, icon: String, onClick: () -> Unit) {
     val pal = LocalPalette.current
     val buzz = rememberBuzz()
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(7.dp)
     val source = remember { MutableInteractionSource() }
     Row(
             Modifier.pressScale(source).height(44.dp).clip(shape).background(pal.panel).border(1.dp, pal.tick, shape)
