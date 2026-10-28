@@ -3,12 +3,15 @@ package com.poise.android.audio
 import android.content.Context
 import android.media.*
 import android.media.projection.MediaProjection
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PerformanceHintManager
 import android.os.Process
 import android.util.Log
 import com.poise.android.service.AudioServiceState
 import com.poise.android.service.PoiseSettings
+import java.util.Locale
 import java.util.concurrent.Executors
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +40,10 @@ class AudioPipeline(private val context: Context) {
 
         private const val HEALTH_LOG_FRAMES = SAMPLE_RATE * 5 / FRAME_SIZE // every ~5 s
         private const val WARMUP_FRAMES = SAMPLE_RATE // the first second of output, while capture starts
+
+        // How long a frame's work should take, for the CPU governor's performance hint: well inside
+        // the 16 ms frame, so slow stretches still have room
+        private const val HINT_TARGET_NS = 4_000_000L
     }
 
     private var audioRecord: AudioRecord? = null
@@ -218,8 +225,18 @@ class AudioPipeline(private val context: Context) {
         var cushion = audioTrack?.bufferSizeInFrames ?: 0
         var lostFrames = 0L
         var skippedFrames = 0L
+        // Work per frame (model, STFT, volume), for the health log
+        var workNs = 0L
+        var workMaxNs = 0L
         applySettings()
-        Log.i(TAG, "Audio thread pinned: ${gtcrnProcessor?.pinToFastCores()} fast cores")
+        // Android 12+: tells the CPU governor how long each frame's work took against the target,
+        // so it can raise clocks before frames run late. Null where the device doesn't support it
+        val hint =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    context.getSystemService(PerformanceHintManager::class.java)
+                            ?.createHintSession(intArrayOf(Process.myTid()), HINT_TARGET_NS)
+                } else null
+        Log.i(TAG, "Audio thread pinned: ${gtcrnProcessor?.pinToFastCores()} fast cores, performance hint ${if (hint != null) "on" else "off"}")
 
         while (_isRunning.value && currentCoroutineContext().isActive) {
             try {
@@ -239,6 +256,7 @@ class AudioPipeline(private val context: Context) {
                     continue // Not enough samples
                 }
                 framesRead += readSize
+                val workStart = System.nanoTime()
 
                 val outputAudio = gtcrnProcessor?.processFrame(inputBuffer)
 
@@ -248,6 +266,10 @@ class AudioPipeline(private val context: Context) {
                     for (i in outputAudio.indices) {
                         outputAudio[i] = (outputAudio[i] * volume).coerceIn(-1f, 1f)
                     }
+                    val work = System.nanoTime() - workStart
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) hint?.reportActualWorkDuration(work)
+                    workNs += work
+                    workMaxNs = maxOf(workMaxNs, work)
 
                     audioTrack?.write(outputAudio, 0, outputAudio.size, AudioTrack.WRITE_BLOCKING)
                     framesWritten += outputAudio.size
@@ -322,12 +344,16 @@ class AudioPipeline(private val context: Context) {
 
                 if (++healthLogCounter >= HEALTH_LOG_FRAMES) {
                     healthLogCounter = 0
-                    logHealth(framesRead, framesWritten, lostFrames, skippedFrames, warmupUnderruns)
+                    val work = String.format(Locale.ROOT, "work=%.1f/%.1f ms", workNs / 1e6 / HEALTH_LOG_FRAMES, workMaxNs / 1e6)
+                    logHealth(framesRead, framesWritten, lostFrames, skippedFrames, warmupUnderruns, work)
+                    workNs = 0L
+                    workMaxNs = 0L
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Processing error: ${e.message}")
             }
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) hint?.close()
     }
 
     /** Queues [frames] of silence without waiting; returns how many were queued. */
@@ -364,14 +390,15 @@ class AudioPipeline(private val context: Context) {
      * Logs what the listener hears. Underruns: the speaker ran out of audio (a click), leaving out
      * the [warmupUnderruns] on silence while capture started. Lost and
      * skipped: input dropped by Android or by us to catch up (a short jump). Delay: from capture
-     * to speaker; it leaves out the playing app's own path to the capture point.
+     * to speaker; it leaves out the playing app's own path to the capture point. [work]: average and
+     * longest frame of work since the last log.
      */
-    private fun logHealth(framesRead: Long, framesWritten: Long, lostFrames: Long, skippedFrames: Long, warmupUnderruns: Int) {
+    private fun logHealth(framesRead: Long, framesWritten: Long, lostFrames: Long, skippedFrames: Long, warmupUnderruns: Int, work: String) {
         val track = audioTrack ?: return
         val record = audioRecord ?: return
         val played = AudioTimestamp()
         val captured = capturedFrames(record, AudioTimestamp())
-        val drops = "underruns=${track.underrunCount - warmupUnderruns} lost=${ms(lostFrames)} ms skipped=${ms(skippedFrames)} ms"
+        val drops = "underruns=${track.underrunCount - warmupUnderruns} lost=${ms(lostFrames)} ms skipped=${ms(skippedFrames)} ms $work"
         if (captured == null || !track.getTimestamp(played)) {
             Log.i(TAG, "Health: $drops")
             return
