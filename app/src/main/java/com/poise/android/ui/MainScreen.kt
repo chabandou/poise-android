@@ -10,8 +10,10 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -52,7 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -65,7 +67,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -110,6 +111,8 @@ import com.poise.android.ui.theme.Palettes
 import com.poise.android.ui.theme.Rajdhani
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.roundToInt
@@ -249,14 +252,23 @@ private val PAGE_SLIDE = spring<Float>(dampingRatio = 1f, stiffness = Spring.Sti
 private const val STEADY_EXTRA_MS = 33L // two skipped frames at 60 Hz
 
 private val SLIDER_TICK_GAP = 9.dp
-private val SLIDER_GIVE = 14.dp // how far the diamond can be pulled past an end, at most
+private val SLIDER_GIVE = 14.dp // how far the thumb can be pulled past an end, at most
 
 // The theme ring glides by spring, so a tap mid-glide turns it without a stop, and it sinks
 // with its speed: low on the way, full size as it settles
-private val GLIDE = spring<Float>(dampingRatio = 0.85f, stiffness = 140f)
+private val GLIDE = spring<Offset>(dampingRatio = 0.85f, stiffness = 140f)
 private const val GLIDE_DIP_SPEED = 4f // slots a second, where the dip is deepest
 
-private fun glideDip(velocity: Float) = (abs(velocity) / GLIDE_DIP_SPEED).coerceAtMost(1f)
+private fun glideDip(velocity: Offset) = (velocity.getDistance() / GLIDE_DIP_SPEED).coerceAtMost(1f)
+
+private const val THEME_COLUMNS = 3
+
+/** Where theme [i]'s tile sits, in slots: a short last row is centred under the full ones. */
+private fun themeSlot(i: Int): Offset {
+    val row = i / THEME_COLUMNS
+    val inRow = minOf(THEME_COLUMNS, Palettes.size - row * THEME_COLUMNS)
+    return Offset((THEME_COLUMNS - inRow) / 2f + i % THEME_COLUMNS, row.toFloat())
+}
 
 @Composable
 internal fun rememberResumed(): Boolean {
@@ -377,34 +389,82 @@ internal fun Modifier.pressScale(source: InteractionSource, by: Float = 0.96f) =
     }
 }
 
-/** Lights up while pressed and fades after: the press feedback for full-width rows. */
-private fun Modifier.pressWash(source: InteractionSource) = composed {
-    val pal = LocalPalette.current
-    val press = rememberPress(source, tween(320))
-    drawBehind { if (press.value > 0f) drawRect(pal.ink.copy(alpha = 0.05f * press.value)) }
+private const val RIPPLE_SPREAD_MS = 450
+private const val RIPPLE_FADE_MS = 380
+private const val RIPPLE_STRENGTH = 0.16f // the accent's alpha while held
+private const val RIPPLE_SOLID = 0.4f // of the radius at full strength, feathering out after
+private val RIPPLE_SPREAD = CubicBezierEasing(0.2f, 0.8f, 0.3f, 1f)
+private val RIPPLE_FADE = CubicBezierEasing(0f, 0f, 0.58f, 1f)
+
+private class Ripple(val press: PressInteraction.Press) {
+    val spread = Animatable(0.06f) // of the reach to the row's farthest corner
+    val shown = Animatable(1f)
 }
 
+/**
+ * Spreads the theme's accent out from the touch while pressed, and fades it after while it keeps
+ * spreading, so a quick tap still sweeps the row: the press feedback for full-width rows.
+ */
+private fun Modifier.pressRipple(source: InteractionSource) = composed {
+    val accent = LocalPalette.current.accent
+    val reduceMotion by PoiseSettings.reduceMotion.collectAsState()
+    val still by rememberUpdatedState(rememberReduceMotion() || reduceMotion) // not a key: a restart would strand a ripple
+    val ripples = remember { mutableStateListOf<Ripple>() }
+    LaunchedEffect(source) {
+        fun fade(press: PressInteraction.Press) {
+            val r = ripples.firstOrNull { it.press == press } ?: return
+            launch {
+                r.shown.animateTo(0f, tween(RIPPLE_FADE_MS, easing = RIPPLE_FADE))
+                ripples -= r
+            }
+        }
+        source.interactions.filterIsInstance<PressInteraction>().collect {
+            when (it) {
+                is PressInteraction.Press -> {
+                    val r = Ripple(it)
+                    ripples += r
+                    launch { if (still) r.spread.snapTo(1f) else r.spread.animateTo(1f, tween(RIPPLE_SPREAD_MS, easing = RIPPLE_SPREAD)) }
+                }
+                is PressInteraction.Release -> fade(it.press)
+                is PressInteraction.Cancel -> fade(it.press)
+            }
+        }
+    }
+    clipToBounds().drawBehind {
+        for (r in ripples) {
+            val at = r.press.pressPosition
+            val radius = hypot(max(at.x, size.width - at.x), max(at.y, size.height - at.y)) * r.spread.value
+            val color = accent.copy(alpha = RIPPLE_STRENGTH * r.shown.value)
+            drawCircle(Brush.radialGradient(0f to color, RIPPLE_SOLID to color, 1f to color.copy(alpha = 0f), center = at, radius = radius), radius, at)
+        }
+    }
+}
+
+/** The gold bar that marks rows and picks, flush against the card's left edge. */
+internal val GoldBarShape = RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp)
+
+// Off, a switch row's bar is half height and dim; on, it fills
 @Composable
-private fun Marker(color: Color, turn: Float = 0f) {
-    Box(Modifier.size(8.dp).rotate(45f + 90f * turn).background(color, RoundedCornerShape(1.dp)))
+private fun Marker(color: Color, on: Float = 1f) {
+    Box(Modifier.size(3.dp, 12.dp + 12.dp * on).background(lerp(color.copy(alpha = 0.45f), color, on.coerceIn(0f, 1f)), GoldBarShape))
 }
 
-/** A titled row with the diamond marker on the left and [trailing] on the right. */
+/** A titled row with the gold bar on its left edge and [trailing] on the right. */
 @Composable
 private fun SettingRow(
         title: String,
         subtitle: String,
         modifier: Modifier = Modifier,
-        markerTurn: Float = 0f,
+        markerOn: Float = 1f,
         trailing: @Composable () -> Unit
 ) {
     val pal = LocalPalette.current
     Row(
-            modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 18.dp, top = 10.dp, bottom = 10.dp),
+            modifier.fillMaxWidth().heightIn(min = 56.dp).padding(end = 18.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
     ) {
-        Marker(pal.secondary, markerTurn)
-        Spacer(Modifier.width(14.dp))
+        Marker(pal.secondary, markerOn)
+        Spacer(Modifier.width(15.dp))
         Column(Modifier.weight(1f)) {
             RowTitle(title)
             Subtitle(subtitle)
@@ -658,8 +718,8 @@ private fun Caption(text: String) {
 }
 
 /**
- * A slider whose readout rolls and ticks under the finger once per [number] step. The square thumb
- * turns into the row markers' diamond while held.
+ * A slider whose readout rolls and ticks under the finger once per [number] step. The thumb is a
+ * gold bar, like the rows' markers, that stretches while held.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -680,8 +740,7 @@ private fun SliderCard(
     var pressed by remember { mutableStateOf(false) }
     val dragged by source.collectIsDraggedAsState() // read first: behind || it would miss the drag's start
     val held = pressed || dragged
-    val turn by animateFloatAsState(if (held) 45f else 0f, spring(dampingRatio = 0.5f, stiffness = 500f), label = "thumb")
-    val grow by animateFloatAsState(if (held) 1.25f else 1f, spring(dampingRatio = 0.5f, stiffness = 500f), label = "thumbSize")
+    val grow by animateFloatAsState(if (held) 1f else 0f, spring(dampingRatio = 0.5f, stiffness = 500f), label = "thumbSize")
     val lift by animateFloatAsState(if (held) 1f else 0f, spring(stiffness = 500f), label = "rulerLift")
     val stretch = remember { Animatable(0f) } // px past either end, rubber-banded
     val current by rememberUpdatedState(position)
@@ -716,8 +775,8 @@ private fun SliderCard(
             }
             TextScaleUpTo(1.3f) { RollDigits("$number $unit", TextStyle(color = pal.accent, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 22.sp), up) }
         }
-        // A ruler lit up to the value, with the gold diamond riding on it. Drag or tap anywhere; the
-        // ticks swell around the diamond, more while held, and past either end it gives a little
+        // A ruler lit up to the value, with the gold bar riding on it. Drag or tap anywhere; the
+        // ticks swell around the bar, more while held, and past either end it gives a little
         Canvas(
                 Modifier.fillMaxWidth()
                         .height(40.dp)
@@ -753,16 +812,15 @@ private fun SliderCard(
             val reach = 28.dp.toPx()
             for (i in 0..n) {
                 val x = from + i * step
-                // Lit up to the diamond, with one tick's width of blend so the edge glides
+                // Lit up to the bar, with one tick's width of blend so the edge glides
                 val lit = ((thumbX - x) / step + 0.5f).coerceIn(0f, 1f)
                 val near = (1f - abs(x - thumbX) / reach).coerceAtLeast(0f)
                 val h = 5.dp.toPx() * (1f + (0.35f + 0.5f * lift) * near * near)
                 drawLine(lerp(pal.tick, pal.accent, lit), Offset(x, cy - h), Offset(x, cy + h), 2.dp.toPx(), StrokeCap.Round)
             }
-            val side = 16.dp.toPx() * grow
-            rotate(turn, Offset(thumbX, cy)) {
-                drawRoundRect(pal.secondary, Offset(thumbX - side / 2, cy - side / 2), Size(side, side), CornerRadius(3.dp.toPx()))
-            }
+            val w = (4.dp + 2.dp * grow).toPx()
+            val h = (24.dp + 8.dp * grow).toPx()
+            drawRoundRect(pal.secondary, Offset(thumbX - w / 2, cy - h / 2), Size(w, h), CornerRadius(w / 2))
         }
         Row {
             Text(ends.first, color = pal.muted, fontSize = 12.sp)
@@ -782,15 +840,15 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
     val stretch by animateDpAsState(if (pressed) 5.dp else 0.dp, spring(stiffness = 700f), label = "knobStretch")
     val track by animateColorAsState(if (checked) pal.accent else pal.tick, tween(200), label = "track")
     val wash by animateColorAsState(if (checked) pal.accentWash else Color.Transparent, tween(200), label = "wash")
-    val turn by animateFloatAsState(if (checked) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 300f), label = "marker")
+    val on by animateFloatAsState(if (checked) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 300f), label = "marker")
     SettingRow(
             title,
             subtitle,
-            Modifier.pressWash(source).toggleable(checked, source, indication = null, role = Role.Switch) {
+            Modifier.pressRipple(source).toggleable(checked, source, indication = null, role = Role.Switch) {
                 buzz(if (it) Buzz.On else Buzz.Off)
                 onChange(it)
             },
-            markerTurn = turn
+            markerOn = on
     ) {
         val shape = RoundedCornerShape(8.dp)
         // 5 dp all round (border included), so the knob sits centred at either end
@@ -875,7 +933,7 @@ private fun ColumnScope.SettingsPage(
             var choosing by remember { mutableStateOf(false) }
             val source = remember { MutableInteractionSource() }
             Box {
-                SettingRow("Auto-stop", "After this long in silence", Modifier.pressWash(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }) {
+                SettingRow("Auto-stop", "After this long in silence", Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }) {
                     RowValue(autoStopLabel(autoStop))
                 }
                 if (choosing) {
@@ -895,35 +953,49 @@ private fun ColumnScope.SettingsPage(
         Caption("Look and feel")
         // One gold ring glides from the old swatch to the new one, sinking a little on the way,
         // while the old colours dissolve into the new
-        val ringAt = remember { Animatable(theme.toFloat()) }
-        LaunchedEffect(theme) { ringAt.animateTo(theme.toFloat(), GLIDE) }
-        Row(
+        val ringAt = remember { Animatable(themeSlot(theme), Offset.VectorConverter, Offset(0.01f, 0.01f)) }
+        LaunchedEffect(theme) { ringAt.animateTo(themeSlot(theme), GLIDE) }
+        val rows = Palettes.indices.chunked(THEME_COLUMNS)
+        Column(
                 Modifier.selectableGroup().drawWithContent {
                     drawContent()
                     val gap = 8.dp.toPx()
-                    val n = Palettes.size
-                    val slot = (size.width - (n - 1) * gap) / n
+                    val slot = Size((size.width - (THEME_COLUMNS - 1) * gap) / THEME_COLUMNS, (size.height - (rows.size - 1) * gap) / rows.size)
                     val k = 1f - 0.12f * glideDip(ringAt.velocity)
                     val w = 2.dp.toPx()
                     val r = 12.dp.toPx() * k
-                    val ring = Size(slot * k - w, size.height * k - w)
+                    val ring = Size(slot.width * k - w, slot.height * k - w)
                     drawRoundRect(
                             pal.secondary,
-                            Offset(ringAt.value * (slot + gap) + (slot - ring.width) / 2, (size.height - ring.height) / 2),
+                            Offset(
+                                    ringAt.value.x * (slot.width + gap) + (slot.width - ring.width) / 2,
+                                    ringAt.value.y * (slot.height + gap) + (slot.height - ring.height) / 2
+                            ),
                             ring,
                             CornerRadius(r),
                             style = Stroke(w)
                     )
                 },
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             TextScaleUpTo(1.3f) {
-                Palettes.forEachIndexed { i, p ->
-                    ThemeTile(p.name, p.panel, p.accent, i == theme, Modifier.weight(1f)) {
-                        if (i != theme) {
-                            buzz(Buzz.Tap)
-                            if (still) PoiseSettings.setTheme(i) else view.crossfade(THEME_FADE_MS.toLong()) { PoiseSettings.setTheme(i) }
+                rows.forEach { row ->
+                    // A short row is padded by half a slot and half a gap each side per missing
+                    // tile, so its tiles keep the full rows' width and sit centred under them
+                    val short = row.size < THEME_COLUMNS
+                    Row(Modifier.height(IntrinsicSize.Max).padding(horizontal = 4.dp * (THEME_COLUMNS - row.size))) {
+                        if (short) Spacer(Modifier.weight((THEME_COLUMNS - row.size) / 2f))
+                        row.forEachIndexed { j, i ->
+                            if (j > 0) Spacer(Modifier.width(8.dp))
+                            val p = Palettes[i]
+                            ThemeTile(p.name, p.panel, p.accent, i == theme, Modifier.weight(1f).fillMaxHeight()) {
+                                if (i != theme) {
+                                    buzz(Buzz.Tap)
+                                    if (still) PoiseSettings.setTheme(i) else view.crossfade(THEME_FADE_MS.toLong()) { PoiseSettings.setTheme(i) }
+                                }
+                            }
                         }
+                        if (short) Spacer(Modifier.weight((THEME_COLUMNS - row.size) / 2f))
                     }
                 }
             }

@@ -51,7 +51,8 @@ class MainActivity : ComponentActivity() {
                         R.style.Theme_PoiseAndroid_Verdant,
                         R.style.Theme_PoiseAndroid_Vigil,
                         R.style.Theme_PoiseAndroid_Ember,
-                        R.style.Theme_PoiseAndroid_Eclipse
+                        R.style.Theme_PoiseAndroid_Eclipse,
+                        R.style.Theme_PoiseAndroid_Orchid
                 )
     }
 

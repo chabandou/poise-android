@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -63,9 +64,9 @@ private val ROOM = 14.dp // around the panel, for its shadow
 
 /**
  * The desktop's card dropdown: the choices open under the row (or over it, without room) as a
- * stack of cards, the current one tinted gold with a diamond. A pick glides the tint to the new
- * card, rests a beat and closes; a tap outside or Back closes it as well. Place it in the row's
- * Box, and compose it only while open: [onClose] says when it has finished closing.
+ * stack of cards, the current one tinted gold with a gold bar on its edge. A pick glides the tint
+ * to the new card, rests a beat and closes; a tap outside or Back closes it as well. Place it in
+ * the row's Box, and compose it only while open: [onClose] says when it has finished closing.
  */
 @Composable
 internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> Unit, onClose: () -> Unit) {
@@ -145,7 +146,7 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
                 // Pressed cards lift toward the gold tint; the current one takes all of it
                 val base = lerp(pal.panel, pal.ink, 0.04f)
                 val fill = lerp(base, lerp(base, pal.secondary, 0.08f), max(check, 0.45f * press))
-                val edge = lerp(lerp(pal.line, pal.secondary.copy(alpha = 0.6f), press), pal.secondary, check)
+                val edge = lerp(pal.line, pal.secondary.copy(alpha = 0.6f), press)
                 val text by animateColorAsState(if (i == checked) pal.ink else pal.muted, tween(SWITCH_MS), label = "cardText")
                 val shape = RoundedCornerShape(12.dp)
                 Box(
@@ -161,12 +162,8 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
                 ) {
                     Text(label, Modifier.align(Alignment.CenterStart), color = text, fontFamily = Rajdhani, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1)
                     if (check > 0.01f) {
-                        Box(
-                                Modifier.align(Alignment.CenterEnd)
-                                        .size(10.dp * (0.6f + 0.4f * check))
-                                        .graphicsLayer { rotationZ = 45f; alpha = check }
-                                        .background(pal.secondary, RoundedCornerShape(2.dp))
-                        )
+                        // Out past the card's padding, onto its left edge
+                        Box(Modifier.align(Alignment.CenterStart).offset(x = -16.dp).size(3.dp, 22.dp * check).background(pal.secondary, GoldBarShape))
                     }
                 }
             }

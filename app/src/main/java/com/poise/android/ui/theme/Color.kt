@@ -43,7 +43,9 @@ val Palettes =
                 palette("Ember", 0xFF140F0A, 0xFF100C08, 0xFF1A130C, 0xFF1E1610, 0xFF2E2318, 0xFF4A3A2A,
                         0xFFFFF8F0, 0xFFA39A8B, 0xFFF5A524, 0xFF6FD0C0),
                 palette("Eclipse", 0xFF0A0A0A, 0xFF070707, 0xFF111111, 0xFF141414, 0xFF282828, 0xFF444444,
-                        0xFFE6E6E6, 0xFFA3A3A3, 0xFFC8C8C8, 0xFF4A83C9, wash = 0.12f)
+                        0xFFE6E6E6, 0xFFA3A3A3, 0xFFC8C8C8, 0xFF4A83C9, wash = 0.12f),
+                palette("Orchid", 0xFF150D14, 0xFF110A10, 0xFF1B1119, 0xFF20141D, 0xFF30202B, 0xFF4D3344,
+                        0xFFFDF2F8, 0xFFA8939F, 0xFFF472B6, 0xFF86C5FF)
         )
 
 val LocalPalette = staticCompositionLocalOf { Palettes[0] }

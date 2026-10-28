@@ -20,4 +20,7 @@
     <style name="Theme.PoiseAndroid.Eclipse">
         <item name="android:windowBackground">#0A0A0A</item>
     </style>
+    <style name="Theme.PoiseAndroid.Orchid">
+        <item name="android:windowBackground">#150D14</item>
+    </style>
 </resources>
