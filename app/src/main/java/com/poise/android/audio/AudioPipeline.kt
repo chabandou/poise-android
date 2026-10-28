@@ -186,13 +186,14 @@ class AudioPipeline(private val context: Context) {
                         .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                         .build()
 
-        // The loop writes at capture's pace, so the audio queued in the track stays at what was put
-        // there first: that's the cushion against slow frames, and all of it is delay. Start at two
-        // frames of silence; the loop adds a frame each time the speaker actually runs dry.
-        audioTrack?.bufferSizeInFrames = 2 * FRAME_SIZE
         audioTrack?.addOnRoutingChangedListener(routingListener, Handler(Looper.getMainLooper()))
         audioManager.registerAudioDeviceCallback(outputWatcher, Handler(Looper.getMainLooper()))
         applyOutput() // before it plays, so it starts where it should
+        // The loop writes at capture's pace, so the audio queued in the track stays at what was put
+        // there first: that's the cushion against slow frames, and all of it is delay. Start at two
+        // frames of silence; the loop adds a frame each time the speaker actually runs dry. Set
+        // after applyOutput: a picked output rebuilds the track at its full capacity (160 ms).
+        audioTrack?.bufferSizeInFrames = 2 * FRAME_SIZE
         // Filled with silence before it plays rather than starting empty (on the Galaxy S9+ the
         // delay then measured about 30 ms lower at the same buffer size)
         audioTrack?.let { writeSilence(it, it.bufferSizeInFrames) }
@@ -213,6 +214,8 @@ class AudioPipeline(private val context: Context) {
         // Frames taken from capture (read, skipped or lost) and frames handed to the speaker
         var framesRead = 0L
         var framesWritten = audioTrack?.bufferSizeInFrames?.toLong() ?: 0L // the silence it starts with
+        // Audio the track may hold before writes wait; grows by a frame per underrun
+        var cushion = audioTrack?.bufferSizeInFrames ?: 0
         var lostFrames = 0L
         var skippedFrames = 0L
         applySettings()
@@ -274,6 +277,9 @@ class AudioPipeline(private val context: Context) {
                     // that only adds delay
                     val track = audioTrack
                     if (track != null) {
+                        // Android rebuilds the track at its full capacity when the output changes
+                        // mid-session (a new pick, a reconnect); keep the cushion we chose
+                        if (track.bufferSizeInFrames > cushion) track.bufferSizeInFrames = cushion
                         if (framesWritten < WARMUP_FRAMES) {
                             underruns = track.underrunCount
                             warmupUnderruns = underruns
@@ -282,6 +288,7 @@ class AudioPipeline(private val context: Context) {
                             val before = track.bufferSizeInFrames
                             // Capped at the track's capacity; past that, more underruns change nothing
                             if (track.setBufferSizeInFrames(before + FRAME_SIZE) > before) {
+                                cushion = track.bufferSizeInFrames
                                 framesWritten += writeSilence(track, FRAME_SIZE)
                                 Log.i(TAG, "Underrun, output cushion now ${ms(track.bufferSizeInFrames.toLong())} ms")
                             }
@@ -302,7 +309,6 @@ class AudioPipeline(private val context: Context) {
                         }
                         val waiting = unread - maxOf(overflow, 0)
                         val queued = track?.let { framesWritten - (it.playbackHeadPosition.toLong() and 0xffffffffL) } ?: 0
-                        val cushion = track?.bufferSizeInFrames ?: 0
                         val excess = minOf(waiting, waiting + queued - cushion)
                         if (excess > 2 * FRAME_SIZE) {
                             val skipped = record.read(skipBuffer, 0, excess.toInt(), AudioRecord.READ_NON_BLOCKING)
