@@ -1,5 +1,6 @@
 package com.poise.android.service
 
+import android.media.AudioDeviceInfo
 import com.poise.android.audio.ProcessingStats
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +42,14 @@ object AudioServiceState {
         if (_stopNote.value == null) _stopNote.value = why
     }
 
+    // Where the session's sound is playing, once Android has routed it
+    private val _routedOutput = MutableStateFlow<AudioDeviceInfo?>(null)
+    val routedOutput: StateFlow<AudioDeviceInfo?> = _routedOutput.asStateFlow()
+
+    fun setRoutedOutput(device: AudioDeviceInfo?) {
+        _routedOutput.value = device
+    }
+
     fun updateStats(newStats: ProcessingStats?) {
         _stats.value = newStats
     }
@@ -48,5 +57,6 @@ object AudioServiceState {
     fun reset() {
         _isActive.value = false
         _stats.value = null
+        _routedOutput.value = null
     }
 }

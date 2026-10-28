@@ -103,6 +103,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.poise.android.audio.ProcessingStats
+import com.poise.android.audio.outputKey
+import com.poise.android.audio.pickableOutputs
 import com.poise.android.service.AudioServiceState
 import com.poise.android.service.PoiseSettings
 import com.poise.android.ui.theme.LocalPalette
@@ -449,13 +451,17 @@ private fun Marker(color: Color, on: Float = 1f) {
     Box(Modifier.size(3.dp, 12.dp + 12.dp * on).background(lerp(color.copy(alpha = 0.45f), color, on.coerceIn(0f, 1f)), GoldBarShape))
 }
 
-/** A titled row with the gold bar on its left edge and [trailing] on the right. */
+/**
+ * A titled row with the gold bar on its left edge and [trailing] on the right. [trailingWeight]
+ * gives [trailing] a set share of the width, so values of any length leave the title where it is.
+ */
 @Composable
 private fun SettingRow(
         title: String,
         subtitle: String,
         modifier: Modifier = Modifier,
         markerOn: Float = 1f,
+        trailingWeight: Float? = null,
         trailing: @Composable () -> Unit
 ) {
     val pal = LocalPalette.current
@@ -470,7 +476,8 @@ private fun SettingRow(
             Subtitle(subtitle)
         }
         Spacer(Modifier.width(12.dp))
-        TextScaleUpTo(1.3f, trailing) // short values and buttons: the title gets the room
+        // Short values and buttons: the title gets the room
+        Box(if (trailingWeight != null) Modifier.weight(trailingWeight) else Modifier) { TextScaleUpTo(1.3f, trailing) }
     }
 }
 
@@ -486,7 +493,7 @@ private fun RollText(text: String, style: TextStyle, up: Boolean = true) {
             },
             contentAlignment = Alignment.CenterEnd,
             label = "roll"
-    ) { Text(it, style = style) }
+    ) { Text(it, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 }
 
 // A row's title and the muted line under it. At large text sizes they take more lines, hyphenated,
@@ -602,11 +609,7 @@ private fun ColumnScope.HomePage(
             }
         }
 
-        Box(Modifier.fillMaxWidth().heightIn(min = 62.dp).panel()) {
-            SettingRow("Output", "Wired or Bluetooth") {
-                RowValue(if (rememberHeadphonesConnected()) "Headphones" else "Earpiece")
-            }
-        }
+        Box(Modifier.fillMaxWidth().heightIn(min = 62.dp).panel()) { OutputRow() }
 
         // After a session that ended by itself, the idle stats give their place to the reason
         val stopNote by AudioServiceState.stopNote.collectAsState()
@@ -678,31 +681,77 @@ private fun StatCell(label: String, value: String?, color: Color, modifier: Modi
     }
 }
 
-private val HEADPHONES =
-        setOf(
-                AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-                AudioDeviceInfo.TYPE_WIRED_HEADSET,
-                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
-                AudioDeviceInfo.TYPE_USB_HEADSET,
-                AudioDeviceInfo.TYPE_BLE_HEADSET
-        )
-
+/** Where Poise plays; a tap picks the output, or leaves it to Android. */
 @Composable
-private fun rememberHeadphonesConnected(): Boolean {
+private fun OutputRow() {
+    val buzz = rememberBuzz()
+    val outputs = rememberOutputs()
+    val picked by PoiseSettings.output.collectAsState()
+    val active by AudioServiceState.isActive.collectAsState()
+    val routed by AudioServiceState.routedOutput.collectAsState()
+    val pickedHere = outputs.firstOrNull { it.outputKey == picked?.key }
+    // In a session, where it plays. Before one, where it will: the pick, or Android's likely choice
+    val playing = routed.takeIf { active } ?: pickedHere
+            ?: outputs.firstOrNull { it.type != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER } ?: outputs.firstOrNull()
+    val subtitle = when {
+        picked == null -> "Automatic"
+        pickedHere == null -> "Pick not connected"
+        else -> "Picked by you"
+    }
+    var choosing by remember { mutableStateOf(false) }
+    val source = remember { MutableInteractionSource() }
+    Box {
+        val pick = Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }
+        SettingRow("Output", subtitle, pick, trailingWeight = 1.4f) {
+            // The name on one line, cut short if it must, and what kind of output under it
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                RowValue(playing?.let(::outputName) ?: "—")
+                RollText(playing?.let(::outputKind) ?: "", TextStyle(color = LocalPalette.current.muted, fontSize = 12.sp, lineHeight = 16.sp))
+            }
+        }
+        if (choosing) {
+            // A pick that's away stays listed, so it shows as the current one
+            val choices = listOf(null) + outputs.map { PoiseSettings.Output(it.outputKey, outputName(it)) } +
+                    listOfNotNull(picked.takeIf { pickedHere == null })
+            CardPicker(
+                    choices.map { it?.name ?: "Automatic" },
+                    choices.indexOfFirst { it?.key == picked?.key },
+                    { PoiseSettings.setOutput(choices[it]) },
+                    { choosing = false }
+            )
+        }
+    }
+}
+
+private fun outputName(device: AudioDeviceInfo) = when (device.type) {
+    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Phone speaker"
+    AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Headphones"
+    // Bluetooth and USB devices carry their own name
+    else -> device.productName.toString().ifBlank { "Headphones" }
+}
+
+private fun outputKind(device: AudioDeviceInfo) = when (device.type) {
+    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Built-in"
+    AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Wired"
+    AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> "USB"
+    else -> "Bluetooth"
+}
+
+/** The connected outputs, kept current as devices come and go. */
+@Composable
+private fun rememberOutputs(): List<AudioDeviceInfo> {
     val audio = LocalContext.current.getSystemService(AudioManager::class.java)
-    fun check() = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in HEADPHONES }
-    var connected by remember { mutableStateOf(check()) }
+    var outputs by remember { mutableStateOf(audio.pickableOutputs()) }
     DisposableEffect(audio) {
         val callback =
                 object : AudioDeviceCallback() {
-                    override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) { connected = check() }
-                    override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) { connected = check() }
+                    override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) { outputs = audio.pickableOutputs() }
+                    override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) { outputs = audio.pickableOutputs() }
                 }
         audio.registerAudioDeviceCallback(callback, null)
         onDispose { audio.unregisterAudioDeviceCallback(callback) }
     }
-    return connected
+    return outputs
 }
 
 // ---- Settings ----
@@ -947,7 +996,7 @@ private fun ColumnScope.SettingsPage(
                 }
             }
             RowDivider()
-            SwitchRow("Stop on unplug", "Headphones removed", stopOnUnplug, PoiseSettings::setStopOnUnplug)
+            SwitchRow("Stop on unplug", "Output disconnected", stopOnUnplug, PoiseSettings::setStopOnUnplug)
         }
 
         Caption("Look and feel")

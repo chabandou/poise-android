@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -102,13 +103,15 @@ class AudioCaptureService : Service() {
                 }
             }
 
-    // Unplugging headphones would move our output to the earpiece or speaker
+    // Unplugging headphones or a speaker would move our output to the phone's speaker. Not when
+    // the user picked the phone's speaker: then our output wasn't on what went away
     private val unplugReceiver =
             object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
                     if (!PoiseSettings.stopOnUnplug.value || audioPipeline == null) return
-                    Log.i(TAG, "Headphones disconnected, stopping")
-                    AudioServiceState.noteStop("Headphones unplugged")
+                    if (PoiseSettings.output.value?.key?.startsWith("${AudioDeviceInfo.TYPE_BUILTIN_SPEAKER}:") == true) return
+                    Log.i(TAG, "Output disconnected, stopping")
+                    AudioServiceState.noteStop("Output disconnected")
                     stopCapture()
                 }
             }

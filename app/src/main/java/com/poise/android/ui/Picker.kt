@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -160,7 +161,7 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
                                 .clickable(source, null, role = Role.RadioButton) { pick(i) }
                                 .padding(horizontal = 16.dp)
                 ) {
-                    Text(label, Modifier.align(Alignment.CenterStart), color = text, fontFamily = Rajdhani, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1)
+                    Text(label, Modifier.align(Alignment.CenterStart), color = text, fontFamily = Rajdhani, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (check > 0.01f) {
                         // Out past the card's padding, onto its left edge
                         Box(Modifier.align(Alignment.CenterStart).offset(x = -16.dp).size(3.dp, 22.dp * check).background(pal.secondary, GoldBarShape))

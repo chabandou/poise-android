@@ -42,6 +42,12 @@ object PoiseSettings {
     private val _reduceMotion = MutableStateFlow(DEFAULT_REDUCE_MOTION)
     val reduceMotion: StateFlow<Boolean> = _reduceMotion.asStateFlow()
 
+    /** The output picked on Home, or null to let Android route. The name shows while it's away. */
+    data class Output(val key: String, val name: String)
+
+    private val _output = MutableStateFlow<Output?>(null)
+    val output: StateFlow<Output?> = _output.asStateFlow()
+
     fun init(context: Context) {
         if (prefs != null) return
         val p = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -52,6 +58,7 @@ object PoiseSettings {
         _theme.value = p.getInt("theme", _theme.value)
         _haptics.value = p.getBoolean("haptics", _haptics.value)
         _reduceMotion.value = p.getBoolean("reduce_motion", _reduceMotion.value)
+        _output.value = p.getString("output_key", null)?.let { Output(it, p.getString("output_name", null) ?: "") }
         AudioServiceState.setOutputVolume(p.getFloat("volume", AudioServiceState.outputVolume.value))
         prefs = p
     }
@@ -97,6 +104,11 @@ object PoiseSettings {
     fun setReduceMotion(v: Boolean) {
         _reduceMotion.value = v
         prefs?.edit()?.putBoolean("reduce_motion", v)?.apply()
+    }
+
+    fun setOutput(v: Output?) {
+        _output.value = v
+        prefs?.edit()?.putString("output_key", v?.key)?.putString("output_name", v?.name)?.apply()
     }
 
     /** Puts every setting on the Settings page back to its default. The volume stays as it is. */

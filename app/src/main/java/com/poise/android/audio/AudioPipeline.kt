@@ -3,6 +3,8 @@ package com.poise.android.audio
 import android.content.Context
 import android.media.*
 import android.media.projection.MediaProjection
+import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import android.util.Log
 import com.poise.android.service.AudioServiceState
@@ -42,6 +44,18 @@ class AudioPipeline(private val context: Context) {
     private var gtcrnProcessor: GTCRNProcessor? = null
     private var processingJob: Job? = null
     private var mediaProjection: MediaProjection? = null
+
+    // The output picked on Home, applied from the loop. Looked up again when the pick changes or a
+    // device comes or goes: a reconnected device has a new id, and the track only knows the old one
+    private var appliedOutput: PoiseSettings.Output? = null
+    @Volatile private var outputsChanged = true
+    private val audioManager = context.getSystemService(AudioManager::class.java)
+    private val outputWatcher =
+            object : AudioDeviceCallback() {
+                override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) { outputsChanged = true }
+                override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) { outputsChanged = true }
+            }
+    private val routingListener = AudioRouting.OnRoutingChangedListener { AudioServiceState.setRoutedOutput(it.routedDevice) }
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
@@ -176,6 +190,9 @@ class AudioPipeline(private val context: Context) {
         // there first: that's the cushion against slow frames, and all of it is delay. Start at two
         // frames of silence; the loop adds a frame each time the speaker actually runs dry.
         audioTrack?.bufferSizeInFrames = 2 * FRAME_SIZE
+        audioTrack?.addOnRoutingChangedListener(routingListener, Handler(Looper.getMainLooper()))
+        audioManager.registerAudioDeviceCallback(outputWatcher, Handler(Looper.getMainLooper()))
+        applyOutput() // before it plays, so it starts where it should
         // Filled with silence before it plays rather than starting empty (on the Galaxy S9+ the
         // delay then measured about 30 ms lower at the same buffer size)
         audioTrack?.let { writeSilence(it, it.bufferSizeInFrames) }
@@ -312,6 +329,17 @@ class AudioPipeline(private val context: Context) {
         processor.silenceThresholdDb = PoiseSettings.silenceDb.value.toFloat()
         processor.residualGain =
                 Math.pow(10.0, PoiseSettings.reductionDb(PoiseSettings.strength.value) / 20.0).toFloat()
+        applyOutput()
+    }
+
+    /** Sends the track to the picked output. Without one, or while it's away, Android routes it. */
+    private fun applyOutput() {
+        val track = audioTrack ?: return
+        val want = PoiseSettings.output.value
+        if (!outputsChanged && want == appliedOutput) return
+        outputsChanged = false
+        appliedOutput = want
+        track.setPreferredDevice(want?.let { w -> audioManager.pickableOutputs().firstOrNull { it.outputKey == w.key } })
     }
 
     /** Frames captured so far, extrapolated to now, or null while capture has no timestamp yet. */
@@ -370,6 +398,8 @@ class AudioPipeline(private val context: Context) {
         audioRecord?.release()
         audioRecord = null
 
+        audioManager.unregisterAudioDeviceCallback(outputWatcher)
+        audioTrack?.removeOnRoutingChangedListener(routingListener)
         audioTrack?.release()
         audioTrack = null
 
