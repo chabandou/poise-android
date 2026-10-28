@@ -220,7 +220,7 @@ class AudioCaptureService : Service() {
         )
         watchingUnplug = true
 
-        // Mute STREAM_MUSIC - our output on the voice call stream still plays
+        // Mute STREAM_MUSIC - our output on the accessibility stream still plays
         muteSystemAudio()
 
         // Start audio pipeline

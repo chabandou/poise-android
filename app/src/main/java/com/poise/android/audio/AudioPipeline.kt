@@ -142,12 +142,12 @@ class AudioPipeline(private val context: Context) {
     }
 
     private fun setupAudioOutput() {
-        // Use STREAM_VOICE_CALL (via USAGE_VOICE_COMMUNICATION) which routes to
-        // headphones/Bluetooth
-        // This allows us to mute STREAM_MUSIC while our processed output still plays
+        // The accessibility stream plays at the media volume but isn't silenced by the media mute,
+        // so STREAM_MUSIC can be muted while our processed output still plays. Unlike the voice-call
+        // stream it goes to the main output, with a shorter path to the speaker.
         val audioAttributes =
                 AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build()
 
