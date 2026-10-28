@@ -565,9 +565,11 @@ private fun ColumnScope.HomePage(
                     StatCell("Stopped", note, pal.secondary, cell)
                 } else {
                     val voice = stats?.isVadDetected == true
-                    StatCell("Load", stats?.let { "${(it.rtf * 100).roundToInt()}%" }, pal.ink, cell) // the model's share of each frame
+                    // Quiet frames skip the model, so its numbers would only hold their last value
+                    val load = stats?.let { if (voice) "${(it.rtf * 100).roundToInt()}%" else "Idle" } // the model's share of each frame
+                    StatCell("Load", load, if (voice) pal.ink else pal.muted, cell, roll = !voice)
                     Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
-                    StatCell("Frame", stats?.let { "%.1f ms".format(it.avgTimeMs) }, pal.ink, cell)
+                    StatCell("Frame", stats?.takeIf { voice }?.let { "%.1f ms".format(it.avgTimeMs) }, pal.ink, cell)
                     Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
                     StatCell("Voice", stats?.let { if (voice) "Yes" else "Quiet" }, if (voice) pal.secondary else pal.muted, cell, roll = true)
                 }
