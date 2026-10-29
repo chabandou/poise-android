@@ -82,7 +82,7 @@
     <string name="reset">Tetap semula</string>
     <string name="reset_confirm">Sahkan</string>
     <string name="about_tagline" formatted="false">Pengasingan suara, 100% pada peranti</string>
-    <string name="about_credits">Penyahhingar: GTCRN (Rong et al., 2024)\nDibina dengan Kotlin dan C++</string>
+    <string name="about_credits">DeepFilterNet3 (Schröter et al., 2023)\nGTCRN (Rong et al., 2024)\nDibina dengan Kotlin dan C++</string>
     <string name="report_issue">Laporkan isu</string>
     <string name="emblem_description">Lambang Poise</string>
     <string name="disclaimer">Poise tidak selalu dapat membuang muzik sepenuhnya. Dalam keadaan tertentu sebahagiannya boleh terlepas, terutamanya muzik kuat yang hampir dengan pertuturan. Kami tidak dapat menjamin audio yang dihasilkan dibenarkan, gunakan pertimbangan anda sendiri.</string>

@@ -87,7 +87,7 @@
     <string name="reset">استعادة</string>
     <string name="reset_confirm">تأكيد</string>
     <string name="about_tagline" formatted="false">عزل الصوت، بالكامل على الجهاز</string>
-    <string name="about_credits">إزالة الضوضاء: GTCRN (Rong et al., 2024)\nمبني بلغتي Kotlin وC++</string>
+    <string name="about_credits">DeepFilterNet3 (Schröter et al., 2023)\nGTCRN (Rong et al., 2024)\nمبني بلغتي Kotlin وC++</string>
     <string name="report_issue">الإبلاغ عن مشكلة</string>
     <string name="emblem_description">شعار Poise</string>
     <string name="disclaimer">لا يستطيع Poise دائمًا إزالة الموسيقى بالكامل. في بعض الحالات قد يمرّ جزء منها، خاصةً الموسيقى العالية القريبة من الكلام. لا يمكننا ضمان أن الصوت الناتج مباح، فاستخدم تقديرك.</string>

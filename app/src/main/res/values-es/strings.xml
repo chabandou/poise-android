@@ -84,7 +84,7 @@
     <string name="reset">Restablecer</string>
     <string name="reset_confirm">Confirmar</string>
     <string name="about_tagline" formatted="false">Aislamiento de voz, 100 % en el dispositivo</string>
-    <string name="about_credits">Reducción de ruido: GTCRN (Rong et al., 2024)\nHecho con Kotlin y C++</string>
+    <string name="about_credits">DeepFilterNet3 (Schröter et al., 2023)\nGTCRN (Rong et al., 2024)\nHecho con Kotlin y C++</string>
     <string name="report_issue">Reportar error</string>
     <string name="emblem_description">Emblema de Poise</string>
     <string name="disclaimer">Poise no siempre puede eliminar la música por completo. En algunos casos parte puede pasar, sobre todo música alta cercana a la voz. No podemos garantizar que el audio resultante sea lícito, usa tu propio criterio.</string>

@@ -1313,8 +1313,8 @@ private fun ThemeTile(name: String, panel: Color, accent: Color, on: Boolean, mo
 
 private const val GITHUB =
         "M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6.2 0C6.6 2.8 5.6 3.1 5.6 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.2 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"
-private val EMBLEM_MIN = 120.dp
-private val EMBLEM_MAX = 210.dp
+private val EMBLEM_MIN = 190.dp
+private val EMBLEM_MAX = 240.dp
 private const val WARNING = "M12 3l9.5 16.5h-19z M12 10v4M12 17v.01"
 
 @Composable
@@ -1337,16 +1337,16 @@ private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Un
                     horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(Modifier.height(10.dp))
-                Title("Poise Voice Isolator", size = 30)
-                Text("v$versionName", color = pal.secondary, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                Title("Poise Voice Isolator", size = 22)
+                Text("v$versionName", color = pal.secondary, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                 Spacer(Modifier.height(4.dp))
-                Text(stringResource(R.string.about_tagline), color = pal.ink, fontSize = 14.sp, textAlign = TextAlign.Center)
+                Text(stringResource(R.string.about_tagline), color = pal.ink, fontSize = 13.sp, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(10.dp))
                 Text(
                         stringResource(R.string.about_credits),
                         color = pal.muted,
-                        fontSize = 13.sp,
-                        lineHeight = 22.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
                         textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(14.dp))
@@ -1360,8 +1360,8 @@ private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Un
                         stringResource(R.string.disclaimer),
                         Modifier.padding(horizontal = 8.dp),
                         color = pal.muted,
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
                         textAlign = TextAlign.Center
                 )
             }
@@ -1376,14 +1376,14 @@ private fun LinkButton(text: String, icon: String, onClick: () -> Unit) {
     val shape = RoundedCornerShape(7.dp)
     val source = remember { MutableInteractionSource() }
     Row(
-            Modifier.pressScale(source).height(44.dp).clip(shape).background(pal.panel).border(1.dp, pal.tick, shape)
+            Modifier.pressScale(source).height(38.dp).clip(shape).background(pal.panel).border(1.dp, pal.tick, shape)
                     .clickable(source, null) { buzz(Buzz.Tap); onClick() }
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 13.dp),
             verticalAlignment = Alignment.CenterVertically
     ) {
-        PathIcon(icon, 24f, 16.dp, pal.secondary, stroke = 1.8f)
-        Spacer(Modifier.width(8.dp))
-        Text(text, color = pal.ink, fontSize = 14.sp, maxLines = 1)
+        PathIcon(icon, 24f, 14.dp, pal.secondary, stroke = 1.8f)
+        Spacer(Modifier.width(7.dp))
+        Text(text, color = pal.ink, fontSize = 13.sp, maxLines = 1)
     }
 }
 

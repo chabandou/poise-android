@@ -111,7 +111,8 @@
 
     <!-- About -->
     <string name="about_tagline" formatted="false">Voice isolation, 100% on-device</string>
-    <string name="about_credits">Denoising: GTCRN (Rong et al., 2024)\nBuilt with Kotlin and C++</string>
+    <!-- The model papers stay as they are; only the last line is translated -->
+    <string name="about_credits">DeepFilterNet3 (Schröter et al., 2023)\nGTCRN (Rong et al., 2024)\nBuilt with Kotlin and C++</string>
     <string name="report_issue">Report an issue</string>
     <string name="emblem_description">Poise emblem</string>
     <!-- Also shown once, before the first session -->

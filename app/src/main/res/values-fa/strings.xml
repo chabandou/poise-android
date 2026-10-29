@@ -83,7 +83,7 @@
     <string name="reset">بازنشانی</string>
     <string name="reset_confirm">تأیید</string>
     <string name="about_tagline" formatted="false">جداسازی صدا، 100% روی دستگاه</string>
-    <string name="about_credits">حذف نویز: GTCRN (Rong et al., 2024)\nساخته‌شده با Kotlin و C++</string>
+    <string name="about_credits">DeepFilterNet3 (Schröter et al., 2023)\nGTCRN (Rong et al., 2024)\nساخته‌شده با Kotlin و C++</string>
     <string name="report_issue">گزارش مشکل</string>
     <string name="emblem_description">نشان Poise</string>
     <string name="disclaimer">Poise همیشه نمی‌تواند موسیقی را کاملاً حذف کند. در برخی موارد بخشی از آن عبور می‌کند، به‌ویژه موسیقی بلندی که به گفتار نزدیک است. نمی‌توانیم تضمین کنیم که صدای خروجی از نظر شرعی مجاز باشد، خودتان قضاوت کنید.</string>

@@ -84,7 +84,7 @@
     <string name="reset">Rétablir</string>
     <string name="reset_confirm">Confirmer</string>
     <string name="about_tagline" formatted="false">Isolation de la voix, 100 % sur l’appareil</string>
-    <string name="about_credits">Débruitage : GTCRN (Rong et al., 2024)\nConçu avec Kotlin et C++</string>
+    <string name="about_credits">DeepFilterNet3 (Schröter et al., 2023)\nGTCRN (Rong et al., 2024)\nConçu avec Kotlin et C++</string>
     <string name="report_issue">Signaler un bug</string>
     <string name="emblem_description">Emblème de Poise</string>
     <string name="disclaimer">Poise ne peut pas toujours supprimer complètement la musique. Dans certains cas, une partie peut passer, surtout une musique forte proche de la voix. Nous ne pouvons pas garantir que le son obtenu soit licite, à vous de juger.</string>

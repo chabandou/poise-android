@@ -83,7 +83,7 @@
     <string name="reset">ری سیٹ</string>
     <string name="reset_confirm">تصدیق</string>
     <string name="about_tagline" formatted="false">آواز کی علیحدگی، 100% آلے پر</string>
-    <string name="about_credits">شور کا خاتمہ: GTCRN (Rong et al., 2024)\nKotlin اور C++ سے بنایا گیا</string>
+    <string name="about_credits">DeepFilterNet3 (Schröter et al., 2023)\nGTCRN (Rong et al., 2024)\nKotlin اور C++ سے بنایا گیا</string>
     <string name="report_issue">مسئلہ رپورٹ کریں</string>
     <string name="emblem_description">Poise کا نشان</string>
     <string name="disclaimer">Poise ہمیشہ موسیقی کو مکمل طور پر نہیں ہٹا سکتا۔ بعض صورتوں میں کچھ حصہ گزر سکتا ہے، خاص طور پر تیز موسیقی جو گفتگو کے قریب ہو۔ ہم ضمانت نہیں دے سکتے کہ آنے والی آواز جائز ہے، اپنی سمجھ سے فیصلہ کریں۔</string>

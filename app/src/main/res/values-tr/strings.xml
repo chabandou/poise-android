@@ -83,7 +83,7 @@
     <string name="reset">Sıfırla</string>
     <string name="reset_confirm">Onayla</string>
     <string name="about_tagline" formatted="false">Ses ayrıştırma, %100 cihazda</string>
-    <string name="about_credits">Gürültü giderme: GTCRN (Rong et al., 2024)\nKotlin ve C++ ile geliştirildi</string>
+    <string name="about_credits">DeepFilterNet3 (Schröter et al., 2023)\nGTCRN (Rong et al., 2024)\nKotlin ve C++ ile geliştirildi</string>
     <string name="report_issue">Sorun bildir</string>
     <string name="emblem_description">Poise amblemi</string>
     <string name="disclaimer">Poise müziği her zaman tamamen kaldıramaz. Bazı durumlarda bir kısmı geçebilir, özellikle konuşmaya yakın yüksek sesli müzik. Çıkan sesin caiz olduğunu garanti edemeyiz, kendi muhakemenizi kullanın.</string>
