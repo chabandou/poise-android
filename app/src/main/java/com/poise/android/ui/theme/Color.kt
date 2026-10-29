@@ -1,9 +1,18 @@
 package com.poise.android.ui.theme
 
+import android.content.Context
+import android.graphics.Typeface
+import android.graphics.fonts.Font as PlatformFont
+import android.graphics.fonts.FontFamily as PlatformFontFamily
+import android.graphics.fonts.FontStyle as PlatformFontStyle
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.AndroidFont
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontLoadingStrategy
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import com.poise.android.R
 
@@ -50,8 +59,25 @@ val Palettes =
 
 val LocalPalette = staticCompositionLocalOf { Palettes[0] }
 
-val Rajdhani =
-        FontFamily(
-                Font(R.font.rajdhani_semibold, FontWeight.SemiBold),
-                Font(R.font.rajdhani_bold, FontWeight.Bold)
-        )
+/** Rajdhani, with Cairo behind it: Latin and digits stay Rajdhani's, Arabic-script letters are Cairo's. */
+val Rajdhani = FontFamily(WithArabic(FontWeight.SemiBold), WithArabic(FontWeight.Bold))
+
+@OptIn(ExperimentalTextApi::class)
+private class WithArabic(override val weight: FontWeight) : AndroidFont(FontLoadingStrategy.Blocking, WithArabicLoader, FontVariation.Settings()) {
+    override val style = FontStyle.Normal
+}
+
+// A Compose FontFamily picks fonts by weight, never by script, so the fallback is the platform's
+private object WithArabicLoader : AndroidFont.TypefaceLoader {
+    override fun loadBlocking(context: Context, font: AndroidFont): Typeface {
+        fun family(id: Int) = PlatformFontFamily.Builder(PlatformFont.Builder(context.resources, id).build()).build()
+        val bold = font.weight == FontWeight.Bold
+        return Typeface.CustomFallbackBuilder(family(if (bold) R.font.rajdhani_bold else R.font.rajdhani_semibold))
+                .addCustomFallback(family(if (bold) R.font.cairo_bold else R.font.cairo_semibold))
+                .setSystemFallback("sans-serif") // accents, emoji and every other script
+                .setStyle(PlatformFontStyle(font.weight.weight, PlatformFontStyle.FONT_SLANT_UPRIGHT))
+                .build()
+    }
+
+    override suspend fun awaitLoad(context: Context, font: AndroidFont) = loadBlocking(context, font)
+}

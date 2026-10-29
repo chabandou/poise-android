@@ -11,6 +11,8 @@
     <string name="stage_starting">Starting</string>
     <string name="stage_isolating">Isolating</string>
 
+    <!-- Numbers reach every string as text, already in Latin digits (0-9), so they use %1$s, not %d -->
+
     <!-- Home: the dial. Short: drawn inside it -->
     <string name="start">Start</string>
     <string name="stop">Stop</string>
@@ -19,7 +21,7 @@
     <string name="dial_loud">loud</string>
     <string name="dial_start_description">Start isolating</string>
     <string name="dial_stop_description">Stop isolating</string>
-    <string name="volume_percent">Volume %1$d%%</string>
+    <string name="volume_percent">Volume %1$s%%</string>
 
     <!-- Home: the stats under the dial. Labels are shown in capitals -->
     <string name="stat_load">Load</string>
@@ -69,8 +71,8 @@
     <string name="auto_stop_never">Never</string>
     <string name="duration_hour">1 hour</string>
     <plurals name="duration_minutes">
-        <item quantity="one">%d min</item>
-        <item quantity="other">%d min</item>
+        <item quantity="one">%1$s min</item>
+        <item quantity="other">%1$s min</item>
     </plurals>
     <string name="stop_on_unplug">Stop on unplug</string>
 

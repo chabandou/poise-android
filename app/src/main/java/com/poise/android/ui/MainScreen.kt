@@ -130,6 +130,7 @@ import com.poise.android.ui.theme.LocalPalette
 import com.poise.android.ui.theme.crossfade
 import com.poise.android.ui.theme.Palettes
 import com.poise.android.ui.theme.Rajdhani
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -593,7 +594,7 @@ private fun modelNote(model: PoiseSettings.Model) = when (model) {
 @Composable
 @OptIn(ExperimentalComposeUiApi::class)
 private fun duration(minutes: Int) =
-        if (minutes == 60) stringResource(R.string.duration_hour) else pluralStringResource(R.plurals.duration_minutes, minutes, minutes)
+        if (minutes == 60) stringResource(R.string.duration_hour) else pluralStringResource(R.plurals.duration_minutes, minutes, "$minutes")
 
 @Composable
 private fun autoStopLabel(minutes: Int) = if (minutes == 0) stringResource(R.string.auto_stop_never) else duration(minutes)
@@ -606,6 +607,9 @@ private fun stopLabel(why: StopReason) = when (why) {
     StopReason.CaptureFailed -> stringResource(R.string.stop_capture_failed)
     is StopReason.Silent -> stringResource(R.string.stop_silent, duration(why.minutes))
 }
+
+/** The language's number format with Rajdhani's 0-9, rather than Arabic-Indic digits. */
+private fun latinDigits(): Locale = Locale.Builder().setLocale(Locale.getDefault()).setUnicodeLocaleKeyword("nu", "latn").build()
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -693,7 +697,7 @@ private fun ColumnScope.HomePage(
                     val load = stats?.let { if (voice) "${(it.rtf * 100).roundToInt()}%" else idle } // the model's share of each frame
                     StatCell(stringResource(R.string.stat_load), load, if (voice) pal.ink else pal.muted, cell, roll = !voice)
                     Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
-                    StatCell(stringResource(R.string.stat_frame), stats?.takeIf { voice }?.let { "%.1f".format(it.avgTimeMs) }, pal.ink, cell, unit = "ms")
+                    StatCell(stringResource(R.string.stat_frame), stats?.takeIf { voice }?.let { "%.1f".format(latinDigits(), it.avgTimeMs) }, pal.ink, cell, unit = "ms")
                     Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
                     val yes = stringResource(R.string.stat_voice_yes)
                     val quiet = stringResource(R.string.stat_voice_quiet)
@@ -738,7 +742,7 @@ private fun StatCell(label: String, value: String?, color: Color, modifier: Modi
     val pal = LocalPalette.current
     val shown by animateColorAsState(if (value == null) pal.tick else color, tween(300), label = "stat")
     Column(modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.Center) {
-        Text(label.uppercase(), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.2.em)
+        Text(label.uppercase(Locale.getDefault()), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.2.em)
         val style = TextStyle(color = shown, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 22.sp,
                 textDirection = TextDirection.Content) // "10.7 ms" keeps its order right to left
         if (roll || value == null) {
@@ -837,7 +841,7 @@ private fun rememberOutputs(): List<AudioDeviceInfo> {
 private fun Caption(text: String) {
     val pal = LocalPalette.current
     Row(Modifier.padding(top = 2.dp).semantics { heading() }, verticalAlignment = Alignment.CenterVertically) {
-        Text(text.uppercase(), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, letterSpacing = 0.24.em)
+        Text(text.uppercase(Locale.getDefault()), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, letterSpacing = 0.24.em)
         Spacer(Modifier.width(10.dp))
         Box(Modifier.weight(1f).height(1.dp).background(pal.line))
     }

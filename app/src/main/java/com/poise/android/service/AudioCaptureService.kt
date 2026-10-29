@@ -370,7 +370,7 @@ class AudioCaptureService : Service() {
         // the buttons change it.
         return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(getString(R.string.notification_isolating))
-                .setContentText(getString(R.string.volume_percent, volumePercent))
+                .setContentText(getString(R.string.volume_percent, "$volumePercent"))
                 .setProgress(100, volumePercent, false)
                 .setSmallIcon(R.drawable.ic_wave)
                 .setColor(ContextCompat.getColor(this, R.color.poise_cyan))

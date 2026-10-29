@@ -558,7 +558,7 @@ internal fun Dial(
     val texts = remember(size, density, words) { DialText(measurer, size.value * density.density / 300f, density, words) }
     val startDescription = stringResource(R.string.dial_start_description)
     val stopDescription = stringResource(R.string.dial_stop_description)
-    val volumeDescription = stringResource(R.string.volume_percent, percent)
+    val volumeDescription = stringResource(R.string.volume_percent, "$percent")
 
     Canvas(
             Modifier.size(size)
