@@ -58,6 +58,9 @@
     </plurals>
     <string name="stop_on_unplug">Parar ao desconectar</string>
     <string name="caption_look">Aparência</string>
+    <string name="language">Idioma</string>
+    <string name="language_note">O do celular, ou inglês</string>
+    <string name="language_system">Do sistema</string>
     <string name="haptics">Vibração</string>
     <string name="haptics_note">Cliques do dial e toques nos botões</string>
     <string name="reduce_motion">Reduzir movimento</string>

@@ -61,6 +61,9 @@
     </plurals>
     <string name="stop_on_unplug">الإيقاف عند الفصل</string>
     <string name="caption_look">المظهر والتفاعل</string>
+    <string name="language">اللغة</string>
+    <string name="language_note">لغة الهاتف، أو الإنجليزية</string>
+    <string name="language_system">لغة النظام</string>
     <string name="haptics">الاهتزاز اللمسي</string>
     <string name="haptics_note">نقرات القرص ولمسات الأزرار</string>
     <string name="reduce_motion">تقليل الحركة</string>

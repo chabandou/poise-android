@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Poise's languages for Android 13+'s per-app language setting. Keep in step with
+     resourceConfigurations in app/build.gradle.kts and AppLanguage.LANGUAGES -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="ar" />
+    <locale android:name="bn" />
+    <locale android:name="es" />
+    <locale android:name="fa" />
+    <locale android:name="fr" />
+    <locale android:name="in" />
+    <locale android:name="ms" />
+    <locale android:name="pt-BR" />
+    <locale android:name="tr" />
+    <locale android:name="ur" />
+</locale-config>

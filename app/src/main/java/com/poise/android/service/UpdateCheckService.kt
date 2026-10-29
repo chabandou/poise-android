@@ -14,6 +14,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.poise.android.AppLanguage
 import com.poise.android.R
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -52,6 +53,10 @@ class UpdateCheckService : JobService() {
                             .build()
             )
         }
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
     }
 
     override fun onStartJob(params: JobParameters): Boolean {

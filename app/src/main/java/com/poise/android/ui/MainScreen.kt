@@ -123,6 +123,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.poise.android.AppLanguage
 import com.poise.android.R
 import com.poise.android.audio.ProcessingStats
 import com.poise.android.audio.outputKey
@@ -169,6 +170,8 @@ fun MainScreen(
         onAllowBattery: () -> Unit,
         onOpenNotificationSettings: () -> Unit,
         onAddTile: (() -> Unit)?, // null where Android cannot add tiles for apps
+        language: String,
+        onPickLanguage: (String) -> Unit,
         versionName: String,
         onOpenUrl: (String) -> Unit
 ) {
@@ -250,7 +253,7 @@ fun MainScreen(
                 Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
                     when (PAGES[i]) {
                         Page.Home -> TextScaleUpTo(1.3f) { HomePage(motion, stats, outputVolume, onVolumeChange, { onToggleProcessing(!isProcessing) }, still) }
-                        Page.Settings -> SettingsPage(system, onAllowBattery, onOpenNotificationSettings, onAddTile)
+                        Page.Settings -> SettingsPage(system, onAllowBattery, onOpenNotificationSettings, onAddTile, language, onPickLanguage)
                         Page.About -> AboutPage(versionName, onOpenUrl, still, shown(Page.About))
                     }
                 }
@@ -1037,7 +1040,9 @@ private fun ColumnScope.SettingsPage(
         system: SystemStatus,
         onAllowBattery: () -> Unit,
         onOpenNotificationSettings: () -> Unit,
-        onAddTile: (() -> Unit)?
+        onAddTile: (() -> Unit)?,
+        language: String,
+        onPickLanguage: (String) -> Unit
 ) {
     val pal = LocalPalette.current
     val buzz = rememberBuzz()
@@ -1176,6 +1181,8 @@ private fun ColumnScope.SettingsPage(
             }
         }
         Column(Modifier.panel()) {
+            LanguageRow(language, onPickLanguage)
+            RowDivider()
             SwitchRow(stringResource(R.string.haptics), stringResource(R.string.haptics_note), haptics, PoiseSettings::setHaptics)
             RowDivider()
             SwitchRow(stringResource(R.string.reduce_motion), stringResource(R.string.reduce_motion_note), reduceMotion, PoiseSettings::setReduceMotion)
@@ -1224,6 +1231,29 @@ private fun ColumnScope.SettingsPage(
                     confirming = !confirming
                 })
             }
+        }
+    }
+}
+
+/** Poise's language: the phone's (English when Poise doesn't have it), or one picked here. */
+@Composable
+private fun LanguageRow(language: String, onPick: (String) -> Unit) {
+    val buzz = rememberBuzz()
+    var choosing by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<String?>(null) }
+    val source = remember { MutableInteractionSource() }
+    val tags = listOf("") + AppLanguage.LANGUAGES.map { it.first }
+    val names = listOf(stringResource(R.string.language_system)) + AppLanguage.LANGUAGES.map { it.second }
+    // Then by language alone: Android 13+'s own setting may hold a regional tag
+    val picked = tags.indexOf(language).takeIf { it >= 0 }
+            ?: tags.indexOfFirst { it.isNotEmpty() && Locale.forLanguageTag(it).language == Locale.forLanguageTag(language).language }.coerceAtLeast(0)
+    Box {
+        SettingRow(stringResource(R.string.language), stringResource(R.string.language_note), Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }) {
+            RowValue(names[picked])
+        }
+        if (choosing) {
+            // Applied once the picker has closed: the change recreates the screen
+            CardPicker(names, picked, { pending = tags[it] }, { choosing = false; pending?.let(onPick); pending = null })
         }
     }
 }

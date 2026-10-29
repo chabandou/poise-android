@@ -18,12 +18,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.DisposableEffect
@@ -67,6 +70,7 @@ private val SLIDE = 10.dp
 private val GAP = 6.dp // between the row and the panel
 private val INSET = 10.dp // the panel's right edge, in from the row's
 private val ROOM = 14.dp // around the panel, for its shadow
+private val MAX_HEIGHT = 340.dp // six and a half cards: the half shows there's more
 
 /**
  * The desktop's card dropdown: the choices open under the row (or over it, without room) as a
@@ -154,6 +158,10 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
                         .shadow(12.dp, panelShape)
                         .background(pal.panel, panelShape)
                         .border(1.dp, pal.line, panelShape)
+                        // A long list (languages) scrolls, opened two cards above the current one (a card
+                        // and its gap are 52 dp)
+                        .heightIn(max = MAX_HEIGHT)
+                        .verticalScroll(rememberScrollState(with(density) { ((selected - 2).coerceAtLeast(0) * 52).dp.roundToPx() }))
                         .padding(8.dp)
                         .selectableGroup(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)

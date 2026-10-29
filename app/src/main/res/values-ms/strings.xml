@@ -56,6 +56,9 @@
     </plurals>
     <string name="stop_on_unplug">Henti apabila dicabut</string>
     <string name="caption_look">Rupa</string>
+    <string name="language">Bahasa</string>
+    <string name="language_note">Bahasa telefon, atau Inggeris</string>
+    <string name="language_system">Lalai sistem</string>
     <string name="haptics">Haptik</string>
     <string name="haptics_note">Detik dail dan ketikan butang</string>
     <string name="reduce_motion">Kurangkan gerakan</string>

@@ -57,6 +57,9 @@
     </plurals>
     <string name="stop_on_unplug">توقف هنگام جدا کردن</string>
     <string name="caption_look">ظاهر</string>
+    <string name="language">زبان</string>
+    <string name="language_note">زبان گوشی، وگرنه انگلیسی</string>
+    <string name="language_system">زبان سیستم</string>
     <string name="haptics">لرزش لمسی</string>
     <string name="haptics_note">تیک‌های صفحه‌گرد و لمس دکمه‌ها</string>
     <string name="reduce_motion">کاهش حرکت</string>

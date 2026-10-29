@@ -58,6 +58,9 @@
     </plurals>
     <string name="stop_on_unplug">Arrêt au débranchement</string>
     <string name="caption_look">Apparence</string>
+    <string name="language">Langue</string>
+    <string name="language_note">Du téléphone, sinon anglais</string>
+    <string name="language_system">Système</string>
     <string name="haptics">Vibrations</string>
     <string name="haptics_note">Crans du cadran et appuis</string>
     <string name="reduce_motion">Réduire les animations</string>

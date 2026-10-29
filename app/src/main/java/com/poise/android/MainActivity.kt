@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.StatusBarManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
@@ -89,6 +90,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         PoiseSettings.init(this)
         setTheme(WINDOW_THEMES.getOrElse(PoiseSettings.theme.value) { WINDOW_THEMES[0] })
@@ -104,6 +109,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+        var language by mutableStateOf(AppLanguage.get(this))
 
         setContent {
             val theme by PoiseSettings.theme.collectAsState()
@@ -143,6 +149,8 @@ class MainActivity : ComponentActivity() {
                             )
                         },
                         onAddTile = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ::requestAddTile else null,
+                        language = language,
+                        onPickLanguage = { language = it; AppLanguage.set(this, it) },
                         versionName = versionName,
                         onOpenUrl = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
                 )

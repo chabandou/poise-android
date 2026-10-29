@@ -57,6 +57,9 @@
     </plurals>
     <string name="stop_on_unplug">Çıkarınca durdur</string>
     <string name="caption_look">Görünüm</string>
+    <string name="language">Dil</string>
+    <string name="language_note">Telefonun dili, yoksa İngilizce</string>
+    <string name="language_system">Sistem</string>
     <string name="haptics">Titreşim</string>
     <string name="haptics_note">Kadran tıkları ve düğme dokunuşları</string>
     <string name="reduce_motion">Hareketi azalt</string>

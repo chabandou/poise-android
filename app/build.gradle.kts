@@ -16,6 +16,11 @@ android {
         versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Only Poise's own languages (also in res/xml/locales_config.xml and AppLanguage.LANGUAGES),
+        // plus the debug pseudolocales. The libraries' translations would otherwise make Android
+        // pick German for a German-then-Spanish phone, and show English instead of Spanish
+        resourceConfigurations += listOf("en", "ar", "bn", "es", "fa", "fr", "in", "ms", "pt-rBR", "tr", "ur", "en-rXA", "ar-rXB")
         
         vectorDrawables {
             useSupportLibrary = true
@@ -33,11 +38,6 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
-    }
-
-    // Lists the app's languages for Android 13+'s per-app language setting
-    androidResources {
-        generateLocaleConfig = true
     }
 
     buildTypes {

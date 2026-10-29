@@ -18,6 +18,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.poise.android.AppLanguage
 import com.poise.android.MainActivity
 import com.poise.android.R
 import com.poise.android.audio.AudioPipeline
@@ -119,6 +120,10 @@ class AudioCaptureService : Service() {
 
     private fun stepOutputVolume(steps: Int) {
         AudioServiceState.setOutputVolume(AudioServiceState.outputVolume.value + steps * VOLUME_STEP)
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase)) // the notification in the app's language
     }
 
     override fun onCreate() {

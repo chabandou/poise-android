@@ -57,6 +57,9 @@
     </plurals>
     <string name="stop_on_unplug">پلگ نکالنے پر روکیں</string>
     <string name="caption_look">شکل و صورت</string>
+    <string name="language">زبان</string>
+    <string name="language_note">فون کی زبان، ورنہ انگریزی</string>
+    <string name="language_system">سسٹم کی زبان</string>
     <string name="haptics">لرزش</string>
     <string name="haptics_note">ڈائل کی ٹک اور بٹن کے لمس</string>
     <string name="reduce_motion">حرکت کم کریں</string>

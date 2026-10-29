@@ -57,6 +57,9 @@
     </plurals>
     <string name="stop_on_unplug">প্লাগ খুললে থামান</string>
     <string name="caption_look">চেহারা</string>
+    <string name="language">ভাষা</string>
+    <string name="language_note">ফোনের ভাষা, নইলে ইংরেজি</string>
+    <string name="language_system">সিস্টেম ডিফল্ট</string>
     <string name="haptics">হ্যাপটিক্স</string>
     <string name="haptics_note">ডায়ালের টিক ও বোতামের ট্যাপ</string>
     <string name="reduce_motion">মোশন কমান</string>

@@ -78,6 +78,10 @@
 
     <!-- Settings: Look and feel -->
     <string name="caption_look">Look and feel</string>
+    <string name="language">Language</string>
+    <string name="language_note">The phone\'s, or English</string>
+    <!-- First in the list of languages: follow the phone -->
+    <string name="language_system">System default</string>
     <string name="haptics">Haptics</string>
     <string name="haptics_note">Dial ticks and button taps</string>
     <string name="reduce_motion">Reduce motion</string>
