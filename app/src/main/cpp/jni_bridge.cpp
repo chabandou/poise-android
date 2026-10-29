@@ -1,9 +1,11 @@
 /**
  * JNI Bridge - Native C++ to Kotlin Interface
  *
- * STFT/iSTFT and the GTCRN model (gtcrn.cpp) for GTCRNProcessor.
+ * STFT/iSTFT and the GTCRN model (gtcrn.cpp) for GTCRNProcessor, DeepFilterNet3 (df3.cpp) for
+ * DF3Processor.
  */
 
+#include "df3.h"
 #include "gtcrn.h"
 #include "stft.h"
 #include <algorithm>
@@ -209,6 +211,38 @@ JNIEXPORT jint JNICALL Java_com_poise_android_audio_GTCRNProcessor_pinToFastCore
   if (CPU_COUNT(&fast) == 0) return 0;
   // 0 is this thread: affinity is per thread on Linux
   return sched_setaffinity(0, sizeof fast, &fast) == 0 ? CPU_COUNT(&fast) : -errno;
+}
+
+JNIEXPORT jint JNICALL Java_com_poise_android_audio_DF3Processor_pinToFastCores(JNIEnv *env, jobject thiz) {
+  return Java_com_poise_android_audio_GTCRNProcessor_pinToFastCores(env, thiz);
+}
+
+/** Loads DF3 from the bytes of assets/df3.weights; 0 if they don't fit the code. */
+JNIEXPORT jlong JNICALL Java_com_poise_android_audio_DF3Processor_nativeInit(JNIEnv *env, jobject thiz,
+                                                                            jbyteArray weights) {
+  jbyte *bytes = env->GetByteArrayElements(weights, nullptr);
+  Df3 *model = df3_create(bytes, env->GetArrayLength(weights));
+  env->ReleaseByteArrayElements(weights, bytes, JNI_ABORT);
+  if (!model) LOGE("df3.weights doesn't match the model code");
+  return reinterpret_cast<jlong>(model);
+}
+
+/** input and output: 512 samples. */
+JNIEXPORT void JNICALL Java_com_poise_android_audio_DF3Processor_nativeRun(JNIEnv *env, jobject thiz, jlong handle,
+                                                                          jfloatArray input, jfloatArray output) {
+  float in[512], out[512];
+  env->GetFloatArrayRegion(input, 0, 512, in);
+  df3_run(reinterpret_cast<Df3 *>(handle), in, out);
+  env->SetFloatArrayRegion(output, 0, 512, out);
+}
+
+JNIEXPORT void JNICALL Java_com_poise_android_audio_DF3Processor_nativeReset(JNIEnv *env, jobject thiz, jlong handle) {
+  df3_reset(reinterpret_cast<Df3 *>(handle));
+}
+
+JNIEXPORT void JNICALL Java_com_poise_android_audio_DF3Processor_nativeDestroy(JNIEnv *env, jobject thiz,
+                                                                              jlong handle) {
+  df3_destroy(reinterpret_cast<Df3 *>(handle));
 }
 
 } // extern "C"

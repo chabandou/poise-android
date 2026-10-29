@@ -4,10 +4,11 @@ project("poise_native")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# STFT/iSTFT and the GTCRN model
+# STFT/iSTFT, the GTCRN model and DeepFilterNet3
 add_library(poise_native SHARED
     jni_bridge.cpp
     gtcrn.cpp
+    df3.cpp
     stft.cpp
 )
 # The model runs every 16 ms, so debug builds need optimized code too (this comes after -O0)
