@@ -54,6 +54,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
@@ -86,6 +87,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -463,6 +465,7 @@ private fun SettingRow(
         modifier: Modifier = Modifier,
         markerOn: Float = 1f,
         trailingWeight: Float? = null,
+        subtitleRoom: List<String> = emptyList(), // subtitles it may switch to, so their room is kept
         trailing: @Composable () -> Unit
 ) {
     val pal = LocalPalette.current
@@ -474,7 +477,10 @@ private fun SettingRow(
         Spacer(Modifier.width(15.dp))
         Column(Modifier.weight(1f)) {
             RowTitle(title)
-            Subtitle(subtitle)
+            Box {
+                for (s in subtitleRoom) Room { Subtitle(s) }
+                Subtitle(subtitle)
+            }
         }
         Spacer(Modifier.width(12.dp))
         // Short values and buttons: the title gets the room
@@ -513,6 +519,12 @@ private fun Subtitle(text: String) {
 }
 
 private val WRAPPED = TextStyle(hyphens = Hyphens.Auto)
+
+/** Takes [content]'s room unseen and unread, so a slot keeps the size of its biggest choice. */
+@Composable
+private fun Room(content: @Composable () -> Unit) {
+    Box(Modifier.alpha(0f).clearAndSetSemantics {}) { content() }
+}
 
 /**
  * Lets the user's text size grow [content]'s text to at most [max] times, for places that can't
@@ -991,8 +1003,16 @@ private fun ColumnScope.SettingsPage(
             val source = remember { MutableInteractionSource() }
             Box {
                 val subtitle = if (active) "Applies from the next start" else modelNote(model)
-                SettingRow("Model", subtitle, Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }) {
-                    RowValue(modelLabel(model))
+                // Sized for every model's name and note, so picking one doesn't resize the row
+                val models = PoiseSettings.Model.entries
+                SettingRow(
+                        "Model", subtitle, Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true },
+                        subtitleRoom = models.map(::modelNote) + "Applies from the next start"
+                ) {
+                    Box(contentAlignment = Alignment.CenterEnd) {
+                        for (m in models) Room { RowValue(modelLabel(m)) }
+                        RowValue(modelLabel(model))
+                    }
                 }
                 if (choosing) {
                     val choices = PoiseSettings.Model.entries
