@@ -1,10 +1,10 @@
 <!doctype html>
 <!--
-  The README's "How it works" illustration. Render at 2x into .github/media/processing-flow.png:
-    H=$(chromium --headless=new --virtual-time-budget=5000 --window-size=900,800 --dump-dom scripts/processing-flow.html | sed -n 's:.*<title>\([0-9]*\)</title>.*:\1:p')
+  The README's "How it works" illustration, the desktop README's card stack (poise-voice-isolator)
+  with Android's steps. Render at 2x into .github/media/processing-flow.png:
     chromium --headless=new --hide-scrollbars --virtual-time-budget=5000 --force-device-scale-factor=2 \
-      --window-size=900,$H --screenshot=out.png scripts/processing-flow.html
-  Colors are the app's Halcyon palette (ui/theme/Color.kt); the lattice is Dial.kt's tile.
+      --window-size=900,1128 --screenshot=out.png scripts/processing-flow.html
+  Colors are the Halcyon palette (ui/theme/Color.kt).
 -->
 <html>
 <head>
@@ -12,121 +12,113 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500&display=swap">
 <style>
   :root {
-    --bg: #0a111e; --deep: #080e18; --panel: #0f1828; --panel2: #111c30; --line: #1d2a3b; --tick: #34475f;
-    --ink: #f8fafc; --muted: #8b94a3; --accent: #5fd5eb; --gold: #e8c468;
+    --bg: #0a111e; --card: #0f1828; --pill: #111c30; --text: #f8fafc; --muted: #8b94a3;
+    --accent: #5fd5eb; --accent-light: #a5f3fc; --secondary: #e8c468; --line: rgba(165, 200, 255, .22);
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; width: 900px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
-  .lattice { position: absolute; inset: 0; }
-  main { position: relative; padding: 56px 64px 60px; }
+  html, body { margin: 0; }
+  .page { position: relative; width: 900px; height: 1128px; box-sizing: border-box; padding: 64px; overflow: hidden;
+          background: var(--bg); color: var(--text); font-family: Inter, 'Segoe UI', system-ui, sans-serif; }
+  .lattice { position: absolute; left: 0; top: 0; }
+  .rail { position: absolute; left: 115px; top: 304px; width: 2px; height: 544px; background: var(--line); }
+  .brand { position: relative; display: flex; align-items: center; gap: 12px; }
+  .brand span { font: 600 15px Rajdhani, sans-serif; letter-spacing: .24em; color: var(--accent-light); }
+  h1 { position: relative; margin: 16px 0 0; font: 700 52px/56px Rajdhani, sans-serif; }
+  .sub { position: relative; margin: 8px 0 0; font-size: 16px; line-height: 24px; color: var(--muted); }
 
-  .brand { display: flex; align-items: center; gap: 14px; }
-  .brand span { font: 600 15px Rajdhani; letter-spacing: .38em; color: var(--accent); }
-  h1 { font: 700 60px/1 Rajdhani; margin: 22px 0 12px; letter-spacing: -.005em; }
-  .sub { color: var(--muted); font-size: 18px; margin: 0; }
+  .steps { position: absolute; left: 64px; top: 248px; width: 772px; display: flex; flex-direction: column; gap: 24px; }
+  .card { height: 112px; box-sizing: border-box; padding: 0 28px; display: flex; align-items: center; gap: 20px;
+          background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+  .card.lit { border-color: rgba(95, 213, 235, .55); box-shadow: 0 0 32px rgba(95, 213, 235, .14); }
+  .icon { width: 48px; height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+          background: var(--pill); border-radius: 12px; color: var(--accent); }
+  .icon svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .text { flex-grow: 1; display: flex; flex-direction: column; gap: 4px; }
+  .text b { font: 600 24px/28px Rajdhani, sans-serif; }
+  .lit .text b { font-weight: 700; }
+  .text span { font-size: 14px; line-height: 20px; color: var(--muted); }
+  .tag { padding: 6px 12px; border-radius: 999px; font-size: 12px; line-height: 16px; white-space: nowrap;
+         background: rgba(95, 213, 235, .16); color: var(--accent-light); }
+  .tag.gold { background: rgba(232, 196, 104, .14); color: var(--secondary); }
+  .models { display: flex; padding: 4px; gap: 2px; border-radius: 999px; background: var(--pill); font-size: 12px; line-height: 16px; }
+  .models span { padding: 6px 10px; color: var(--muted); }
+  .models .on { border-radius: 999px; background: rgba(95, 213, 235, .16); color: var(--accent-light); }
+  .num { font: 600 15px Rajdhani, sans-serif; letter-spacing: .18em; color: var(--secondary); }
 
-
-  .steps { position: relative; display: grid; gap: 18px; margin-top: 44px; }
-  .rail { position: absolute; left: 43px; top: 40px; bottom: 40px; width: 2px;
-          background: linear-gradient(var(--tick), var(--accent) 50%, var(--tick)); opacity: .55; }
-  .card { position: relative; display: flex; align-items: center; gap: 22px; min-height: 94px; padding: 0 26px;
-          background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 14px; }
-  .card.lit { border-color: rgba(95, 213, 235, .55); box-shadow: 0 0 0 1px rgba(95, 213, 235, .08), 0 0 38px rgba(95, 213, 235, .16); }
-  .icon { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--deep); border: 1px solid var(--line); }
-  .icon svg { width: 20px; height: 20px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-  .text { flex: 1; }
-  .text b { display: block; font: 600 25px/1.1 Rajdhani; }
-  .text p { margin: 6px 0 0; color: var(--muted); font-size: 15px; line-height: 1.4; }
-  .pills { display: flex; gap: 4px; padding: 4px; border-radius: 99px; background: var(--deep); }
-  .pill { font-size: 13px; padding: 6px 13px; border-radius: 99px; color: var(--muted); white-space: nowrap; }
-  .pill.on { background: rgba(95, 213, 235, .14); color: var(--accent); }
-  .pill.gold { background: rgba(232, 196, 104, .12); color: var(--gold); }
-  .num { font: 600 15px Rajdhani; letter-spacing: .2em; color: var(--gold); width: 30px; text-align: right; }
-
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 30px; padding: 26px 0 22px;
-           background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; }
-  .stat { text-align: center; border-left: 1px solid var(--line); }
-  .stat:first-child { border-left: 0; }
-  .stat .v { font: 600 46px/1 Rajdhani; }
-  .stat .v small { font-size: 22px; color: var(--accent); margin-left: 4px; }
-  .stat .k { margin-top: 12px; font: 500 12px Inter; letter-spacing: .2em; color: var(--muted); }
+  .stats { position: absolute; left: 64px; top: 944px; width: 772px; height: 112px; display: grid;
+           grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; background: var(--pill); border-radius: 16px; }
+  .stats > div { text-align: center; }
+  .stats > div + div { border-left: 1px solid var(--line); }
+  .stats b { display: block; font: 600 40px/44px Rajdhani, sans-serif; }
+  .stats small { font-size: 18px; margin-left: 6px; color: var(--accent); }
+  .stats span { display: block; margin-top: 4px; font-size: 12px; letter-spacing: .16em; color: var(--muted); }
 </style>
 </head>
 <body>
-<svg class="lattice" width="900" height="100%">
-  <defs>
-    <!-- Dial.kt's TILE at 0.85 of 64 -->
-    <pattern id="tile" width="54.4" height="54.4" patternUnits="userSpaceOnUse" patternTransform="translate(-12 -5)">
-      <g transform="scale(.85)" fill="none" stroke="#5fd5eb" stroke-width="1.18">
-        <path d="M21 21H43V43H21Z M32 16.44L47.56 32L32 47.56L16.44 32Z M32 0V16.4M32 47.6V64M0 32H16.4M47.6 32H64M0 0L21 21M64 0L43 21M0 64L21 43M64 64L43 43"/>
-        <circle cx="32" cy="32" r="2.5" fill="#5fd5eb" stroke="none"/>
-      </g>
-    </pattern>
-    <!-- Clear in the middle, like Home's card: the lattice frames the content -->
-    <radialGradient id="fade" cx="50%" cy="46%" r="72%" gradientTransform="translate(.5 .46) scale(1 .62) translate(-.5 -.46)">
-      <stop offset="0" stop-color="#fff" stop-opacity=".02"/>
-      <stop offset=".5" stop-color="#fff" stop-opacity=".05"/>
-      <stop offset="1" stop-color="#fff" stop-opacity=".16"/>
-    </radialGradient>
-    <mask id="m"><rect width="900" height="100%" fill="url(#fade)"/></mask>
-  </defs>
-  <rect width="900" height="100%" fill="url(#tile)" mask="url(#m)"/>
-</svg>
+<div class="page">
+  <svg class="lattice" aria-hidden="true" width="900" height="1128" viewBox="0 0 900 1128">
+    <defs>
+      <pattern id="lattice" width="64" height="64" patternUnits="userSpaceOnUse" x="-14" y="-6">
+        <g fill="none" stroke="#e8c468" stroke-width="1">
+          <rect height="22" width="22" x="21" y="21"/>
+          <rect height="22" transform="rotate(45 32 32)" width="22" x="21" y="21"/>
+          <path d="M32 0V16.4M32 47.6V64M0 32H16.4M47.6 32H64M0 0L21 21M64 0L43 21M0 64L21 43M64 64L43 43"/>
+          <circle cx="32" cy="32" r="2.5"/>
+        </g>
+      </pattern>
+      <radialGradient id="edge" cx="450" cy="564" r="760" gradientUnits="userSpaceOnUse">
+        <stop offset="0.42" stop-color="#000"/>
+        <stop offset="1" stop-color="#fff"/>
+      </radialGradient>
+      <mask id="edgeMask"><rect width="900" height="1128" fill="url(#edge)"/></mask>
+    </defs>
+    <rect width="900" height="1128" fill="url(#lattice)" mask="url(#edgeMask)" opacity="0.16"/>
+  </svg>
 
-<main>
+  <div class="rail"></div>
+
   <div class="brand">
-    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#5fd5eb" stroke-width="1.9" stroke-linecap="round">
-      <path d="M3 12C3 8.1 4.3 3 6.9 3C10.7 3 13.3 21 17.1 21C19.7 21 21 15.9 21 12M3 12H5M19 12H21M15.5 12H16.5M7.5 12H8.5"/>
-    </svg>
+    <svg aria-hidden="true" width="28" height="28" viewBox="1.5 1.5 21 21" fill="none"><defs><linearGradient id="mark" gradientUnits="userSpaceOnUse" x1="12" x2="12" y1="3" y2="21"><stop offset="0" stop-color="#5fd5eb"/><stop offset="0.45" stop-color="#5fd5eb"/><stop offset="1" stop-color="#D1D6DD"/></linearGradient></defs><path d="M3 12C3.00015 8.14286 4.28571 3 6.85714 3C10.7143 2.9999 13.2857 21 17.1429 21C19.7143 21 21 15.8571 21 12 M3 12H5 M7.5 12H8.5 M15.5 12H16.5 M19 12H21" stroke="url(#mark)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <span>POISE FOR ANDROID</span>
   </div>
   <h1>The processing flow</h1>
   <p class="sub">Five steps, one frame every 10.7 ms, all on the phone.</p>
 
   <div class="steps">
-    <div class="rail"></div>
     <div class="card">
-      <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></div>
-      <div class="text"><b>Capture</b><p>Playback capture takes what other apps play.</p></div>
-      <div class="pills"><span class="pill">media · games</span></div>
-      <div class="num">01</div>
+      <div class="icon" style="color: var(--muted)"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3v11M7 9l5 5 5-5M4 16v4h16v-4"/></svg></div>
+      <div class="text"><b>Capture</b><span>Playback capture takes what other apps play.</span></div>
+      <span class="num">01</span>
     </div>
     <div class="card">
-      <div class="icon"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6"/></svg></div>
-      <div class="text"><b>Mute</b><p>The original goes quiet; volume keys move Poise.</p></div>
-      <div class="pills"><span class="pill gold">stream mute</span></div>
-      <div class="num">02</div>
+      <div class="icon" style="color: var(--secondary)"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6"/></svg></div>
+      <div class="text"><b>Mute</b><span>The original goes quiet; volume keys move Poise.</span></div>
+      <span class="tag gold">stream mute</span>
+      <span class="num">02</span>
     </div>
     <div class="card lit">
-      <div class="icon"><svg viewBox="0 0 24 24" style="stroke-width:1.9"><path d="M3 12C3 8.1 4.3 3 6.9 3C10.7 3 13.3 21 17.1 21C19.7 21 21 15.9 21 12M3 12H5M19 12H21M15.5 12H16.5M7.5 12H8.5"/></svg></div>
-      <div class="text"><b>Isolate</b><p>Native C++ keeps the voice and drops the rest.</p></div>
-      <div class="pills"><span class="pill on">DeepFilterNet3</span><span class="pill">GTCRN</span></div>
-      <div class="num">03</div>
+      <div class="icon"><svg width="24" height="24" viewBox="1.5 1.5 21 21" style="stroke-width: 1.9"><path d="M3 12C3.00015 8.14286 4.28571 3 6.85714 3C10.7143 2.9999 13.2857 21 17.1429 21C19.7143 21 21 15.8571 21 12 M3 12H5 M7.5 12H8.5 M15.5 12H16.5 M19 12H21"/></svg></div>
+      <div class="text"><b>Isolate</b><span>Native C++ keeps the voice and drops the rest.</span></div>
+      <div class="models"><span class="on">DFN3</span><span>GTCRN</span></div>
+      <span class="num">03</span>
     </div>
     <div class="card">
-      <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg></div>
-      <div class="text"><b>Mix</b><p>A trace of the input stays under the voice.</p></div>
-      <div class="pills"><span class="pill on">−6 to −60 dB</span></div>
-      <div class="num">04</div>
+      <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></div>
+      <div class="text"><b>Mix</b><span>A trace of the input stays under the voice.</span></div>
+      <span class="tag">−6 to −60 dB</span>
+      <span class="num">04</span>
     </div>
     <div class="card">
-      <div class="icon"><svg viewBox="0 0 24 24"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M3 14h4v6H5a2 2 0 0 1-2-2zM21 14h-4v6h2a2 2 0 0 0 2-2z"/></svg></div>
-      <div class="text"><b>Play</b><p>A 48 kHz low-latency track, straight to your ears.</p></div>
-      <div class="pills"><span class="pill">fast path</span></div>
-      <div class="num">05</div>
+      <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M3 14h4v6H5a2 2 0 0 1-2-2zM21 14h-4v6h2a2 2 0 0 0 2-2z"/></svg></div>
+      <div class="text"><b>Play</b><span>A 48 kHz low-latency track, straight to your ears.</span></div>
+      <span class="num">05</span>
     </div>
   </div>
 
   <div class="stats">
-    <div class="stat"><div class="v">48<small>kHz</small></div><div class="k">OUTPUT</div></div>
-    <div class="stat"><div class="v">10.7<small>ms</small></div><div class="k">PER FRAME</div></div>
-    <div class="stat"><div class="v">~95<small>ms</small></div><div class="k">TO YOUR EARS</div></div>
+    <div><b>48<small>kHz</small></b><span>OUTPUT</span></div>
+    <div><b>10.7<small>ms</small></b><span>PER FRAME</span></div>
+    <div><b>~95<small>ms</small></b><span>TO YOUR EARS</span></div>
   </div>
-</main>
-
-<script>
-  // The page's height, for the render's window size
-  document.title = Math.ceil(document.querySelector('main').getBoundingClientRect().height)
-</script>
+</div>
 </body>
 </html>
