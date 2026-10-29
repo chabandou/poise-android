@@ -20,7 +20,7 @@ object PoiseSettings {
     const val DEFAULT_THEME = 0
     const val DEFAULT_HAPTICS = true
     const val DEFAULT_REDUCE_MOTION = false
-    val DEFAULT_MODEL = Model.GTCRN
+    val DEFAULT_MODEL = Model.DF3
 
     private var prefs: SharedPreferences? = null
 
