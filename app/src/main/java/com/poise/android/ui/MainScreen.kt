@@ -25,6 +25,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -481,9 +482,12 @@ private fun SettingRow(
     }
 }
 
-/** Swaps its text by rolling the old one up (or down) and the new one in. */
+/**
+ * Swaps its text by rolling the old one up (or down) and the new one in. [alignment] is the side
+ * it sits on, so a longer text grows away from it instead of gliding in sideways.
+ */
 @Composable
-private fun RollText(text: String, style: TextStyle, up: Boolean = true) {
+private fun RollText(text: String, style: TextStyle, up: Boolean = true, alignment: Alignment = Alignment.CenterEnd, textModifier: Modifier = Modifier) {
     AnimatedContent(
             text,
             transitionSpec = {
@@ -491,9 +495,9 @@ private fun RollText(text: String, style: TextStyle, up: Boolean = true) {
                         (slideOutVertically(tween(260)) { h -> if (up) -h / 2 else h / 2 } + fadeOut(tween(160))) using
                         SizeTransform(clip = false)
             },
-            contentAlignment = Alignment.CenterEnd,
+            contentAlignment = alignment,
             label = "roll"
-    ) { Text(it, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    ) { Text(it, textModifier, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 }
 
 // A row's title and the muted line under it. At large text sizes they take more lines, hyphenated,
@@ -561,8 +565,11 @@ private fun autoStopLabel(minutes: Int) = when {
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun RowValue(text: String) {
-    RollText(text, TextStyle(color = LocalPalette.current.secondary, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 17.sp))
+    // A name too long for its place scrolls past a few times, then rests at its start
+    RollText(text, TextStyle(color = LocalPalette.current.secondary, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
+            textModifier = Modifier.basicMarquee())
 }
 
 @Composable
@@ -687,7 +694,7 @@ private fun StatCell(label: String, value: String?, color: Color, modifier: Modi
     Column(modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.Center) {
         Text(label.uppercase(), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.2.em)
         val style = TextStyle(color = shown, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 22.sp)
-        if (roll || value == null) RollText(value ?: "—", style) else Text(value, style = style)
+        if (roll || value == null) RollText(value ?: "—", style, alignment = Alignment.CenterStart) else Text(value, style = style)
     }
 }
 
