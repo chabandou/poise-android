@@ -1,7 +1,9 @@
 package com.poise.android.ui
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.os.Build
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
@@ -40,15 +42,61 @@ internal enum class Buzz {
                 Stop -> HapticFeedbackConstants.LONG_PRESS
             }
         }
+
+    /** Its length as a plain pulse, for motors that can only switch on and off: the length is all they can vary. */
+    val pulseMs: Long
+        get() = when (this) {
+            Tick -> 15
+            Step -> 25
+            Edge -> 35
+            Tap, On -> 30
+            Off -> 22
+            Live, Start, Stop -> 45 // what Samsung's own touch feedback plays on such a motor
+        }
 }
 
 /** Plays a [Buzz] when haptics are on in Settings (and in Android's own touch feedback setting). */
 @Composable
 internal fun rememberBuzz(): (Buzz) -> Unit {
     val view = LocalView.current
+    val pulses = remember(view) { basicVibrator(view.context) }
     // Reads the setting when played, so gesture handlers that keep this lambda stay current
-    return remember(view) { { b: Buzz -> if (PoiseSettings.haptics.value) view.performHapticFeedback(b.constant) } }
+    return remember(view) {
+        { b: Buzz ->
+            if (PoiseSettings.haptics.value) {
+                if (pulses != null) pulse(view.context, pulses, b.pulseMs) else view.performHapticFeedback(b.constant)
+            }
+        }
+    }
 }
+
+/**
+ * The vibrator when it says it has no click effect (a Galaxy A16's on/off motor): there Android
+ * drops nearly every performHapticFeedback constant as unsupported, all but LONG_PRESS. Null where
+ * the constants play, or where Android can't tell (before 11, or an unknown answer).
+ */
+private fun basicVibrator(context: Context): Vibrator? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+    val vibrator = context.getSystemService(Vibrator::class.java)?.takeIf { it.hasVibrator() } ?: return null
+    val click = vibrator.areEffectsSupported(VibrationEffect.EFFECT_CLICK)[0]
+    return vibrator.takeIf { click == Vibrator.VIBRATION_EFFECT_SUPPORT_NO }
+}
+
+/** A pulse of [ms] as touch feedback, so Android's touch vibration settings apply to it. */
+private fun pulse(context: Context, vibrator: Vibrator, ms: Long) {
+    if (!touchFeedbackOn(context)) return
+    val effect = VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH))
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator.vibrate(effect, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).build())
+    }
+}
+
+/** Android's own touch feedback setting, which performHapticFeedback follows by itself. */
+private fun touchFeedbackOn(context: Context) =
+        Settings.System.getInt(context.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
 
 private const val RAMP_EVERY = 3 // ticks per tap: denser runs blur into a buzz
 private const val RAMP_FROM = 0.15f // the first tap's strength; they rise to RAMP_TO...
@@ -72,8 +120,7 @@ private fun playRamp(context: Context, times: LongArray): Boolean {
     val vibrator = context.getSystemService(Vibrator::class.java) ?: return false
     if (!vibrator.areAllPrimitivesSupported(tick, click)) return false
     // Off in Poise or in Android's own touch feedback setting: played, but silently
-    val touch = Settings.System.getInt(context.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
-    if (!PoiseSettings.haptics.value || !touch) return true
+    if (!PoiseSettings.haptics.value || !touchFeedbackOn(context)) return true
     // Each delay counts from the end of the tap before, so take its length off where Android says it
     val (tickMs, clickMs) =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) vibrator.getPrimitiveDurations(tick, click).toList() else listOf(0, 0)
