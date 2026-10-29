@@ -18,6 +18,13 @@
     <!-- Lets Settings ask to lift battery limits so a session survives the screen turning off -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- The daily update check (UpdateCheckService): GitHub's latest release, and nothing else -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the check wait for a connection (Android 14+ requires it for that) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Keeps that check scheduled after a restart -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- Back swipes on Android 14+ preview the way back (see PredictiveBackHandler in MainScreen) -->
     <application
         android:allowBackup="true"
@@ -57,6 +64,11 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+
+        <service
+            android:name=".service.UpdateCheckService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
     </application>
 

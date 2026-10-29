@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.sample
 import com.poise.android.service.AudioServiceState
 import com.poise.android.service.PoiseSettings
 import com.poise.android.service.PoiseTileService
+import com.poise.android.service.UpdateCheckService
 import com.poise.android.ui.MainScreen
 import com.poise.android.ui.SystemStatus
 import com.poise.android.ui.theme.Palettes
@@ -96,6 +97,7 @@ class MainActivity : ComponentActivity() {
                 navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
+        UpdateCheckService.schedule(this, PoiseSettings.updateChecks.value)
         // Repairs a media mute left by a crash. Skipped while a session runs, which owns the mute.
         if (!AudioServiceState.isActive.value) {
             AudioCaptureService.restoreSystemAudio(this)

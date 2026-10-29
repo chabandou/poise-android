@@ -11,8 +11,9 @@ android {
         applicationId = "com.poise.android"
         minSdk = 29  // Android 10+ required for AudioPlaybackCapture
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        // Bump both for each release and tag it v<versionName>: the update check compares the tag
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         

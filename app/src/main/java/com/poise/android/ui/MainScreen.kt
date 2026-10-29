@@ -110,6 +110,7 @@ import com.poise.android.audio.outputKey
 import com.poise.android.audio.pickableOutputs
 import com.poise.android.service.AudioServiceState
 import com.poise.android.service.PoiseSettings
+import com.poise.android.service.UpdateCheckService
 import com.poise.android.ui.theme.LocalPalette
 import com.poise.android.ui.theme.crossfade
 import com.poise.android.ui.theme.Palettes
@@ -986,6 +987,8 @@ private fun ColumnScope.SettingsPage(
     val stopOnUnplug by PoiseSettings.stopOnUnplug.collectAsState()
     val theme by PoiseSettings.theme.collectAsState()
     val haptics by PoiseSettings.haptics.collectAsState()
+    val updateChecks by PoiseSettings.updateChecks.collectAsState()
+    val context = LocalContext.current
     val reduceMotion by PoiseSettings.reduceMotion.collectAsState()
     val still = rememberReduceMotion() || reduceMotion
     val view = LocalView.current
@@ -1128,6 +1131,11 @@ private fun ColumnScope.SettingsPage(
                 SettingRow("Quick tile", "Start from the shade") {
                     SmallButton("Add tile", PLUS, onAddTile)
                 }
+            }
+            RowDivider()
+            SwitchRow("Update alerts", "Checks GitHub once a day", updateChecks) {
+                PoiseSettings.setUpdateChecks(it)
+                UpdateCheckService.schedule(context, it)
             }
         }
 
