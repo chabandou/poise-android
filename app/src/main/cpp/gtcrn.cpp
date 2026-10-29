@@ -6,6 +6,7 @@
  */
 
 #include "gtcrn.h"
+#include "nn.h"
 
 #include <cmath>
 #include <cstdint>
@@ -18,25 +19,6 @@ namespace {
 
 constexpr int kBins = 257, kLow = 65, kBands = 129, kHigh = kBins - kLow, kHighBands = kBands - kLow;
 
-/** Hands out the weights in file order, failing on the first one whose size isn't as expected. */
-struct Reader {
-  const uint32_t *sizes;
-  uint32_t count, next = 0;
-  const float *values, *end;
-  bool ok = true;
-
-  const float *take(size_t n) {
-    if (!ok || next >= count || sizes[next] != n || values + n > end) {
-      ok = false;
-      return nullptr;
-    }
-    next++;
-    const float *w = values;
-    values += n;
-    return w;
-  }
-};
-
 float prelu_slope(Reader &r) {
   const float *a = r.take(1);
   return a ? *a : 0;
@@ -44,99 +26,6 @@ float prelu_slope(Reader &r) {
 
 void prelu(float *x, int n, float slope) {
   for (int i = 0; i < n; i++) x[i] = x[i] < 0 ? slope * x[i] : x[i];
-}
-
-/** y[i * SY] += w * x[i * SX] for i < n: the inner loop of every conv and band mapping. */
-template <int SY = 1, int SX = 1>
-void axpy(float *__restrict y, const float *__restrict x, float w, int n) {
-  for (int i = 0; i < n; i++) y[i * SY] += w * x[i * SX];
-}
-
-/**
- * Conv with a 1×k kernel, over frequency only: in [cin][fin] -> out [cout][fout].
- * Each kernel tap is added to a whole output row at once, which the compiler vectorizes.
- */
-void conv(const float *in, int cin, int fin, float *out, int cout, int fout, const float *w,
-          const float *b, int k, int stride, int pad, int groups) {
-  int cin_g = cin / groups, cout_g = cout / groups;
-  for (int o = 0; o < cout; o++) {
-    float *y = out + o * fout;
-    const float *x = in + (o / cout_g) * cin_g * fin;
-    for (int f = 0; f < fout; f++) y[f] = b ? b[o] : 0;
-    for (int i = 0; i < cin_g; i++) {
-      for (int j = 0; j < k; j++) {
-        // Outputs whose tap j lands inside the input: 0 <= f * stride + j - pad < fin
-        int lo = j >= pad ? 0 : (pad - j + stride - 1) / stride;
-        int hi = std::min(fout, (fin - 1 + pad - j) / stride + 1);
-        float wv = w[(o * cin_g + i) * k + j];
-        const float *xs = x + i * fin + lo * stride + j - pad;
-        if (lo < hi) (stride == 1 ? axpy<1, 1> : axpy<1, 2>)(y + lo, xs, wv, hi - lo);
-      }
-    }
-  }
-}
-
-/** w [rows][cols] -> [cols][rows], so sums over a row of w run as a loop over output values. */
-std::vector<float> transpose(const float *w, int rows, int cols) {
-  std::vector<float> t;
-  if (!w) return t;
-  t.resize(rows * cols);
-  for (int r = 0; r < rows; r++)
-    for (int c = 0; c < cols; c++) t[c * rows + r] = w[r * cols + c];
-  return t;
-}
-
-/**
- * tanh as a ratio of two polynomials (Eigen's float approximation), within 3.3e-7 of std::tanh.
- * Unlike std::tanh it's inline arithmetic, so loops over it vectorize. Past ±9 tanh is ±1 in float.
- */
-inline float tanh_fast(float x) {
-  x = std::min(9.f, std::max(-9.f, x));
-  float x2 = x * x;
-  float p = x2 * -2.76076847742355e-16f + 2.00018790482477e-13f;
-  p = x2 * p + -8.60467152213735e-11f;
-  p = x2 * p + 5.12229709037114e-08f;
-  p = x2 * p + 1.48572235717979e-05f;
-  p = x2 * p + 6.37261928875436e-04f;
-  p = x2 * p + 4.89352455891786e-03f;
-  float q = x2 * 1.19825839466702e-06f + 1.18534705686654e-04f;
-  q = x2 * q + 2.26843463243900e-03f;
-  q = x2 * q + 4.89352518554385e-03f;
-  return x * p / q;
-}
-
-inline float sigmoid(float x) { return 0.5f + 0.5f * tanh_fast(0.5f * x); }
-
-/** An ONNX GRU's weights, W and R transposed to [input][gate]. */
-struct Gru {
-  std::vector<float> w, r;
-  const float *b;
-
-  void load(Reader &reader, int in_size) {
-    w = transpose(reader.take(48 * in_size), 48, in_size);
-    r = transpose(reader.take(48 * 16), 48, 16);
-    b = reader.take(96);
-  }
-};
-
-/** One step of an ONNX GRU, hidden size 16, gates z, r, h, linear_before_reset. Updates h. */
-void gru(const Gru &p, int in_size, const float *x, float *h) {
-  constexpr int H = 16;
-  float gx[3 * H], gh[3 * H];
-  for (int g = 0; g < 3 * H; g++) {
-    gx[g] = p.b[g];
-    gh[g] = p.b[3 * H + g];
-  }
-  for (int i = 0; i < in_size; i++)
-    for (int g = 0; g < 3 * H; g++) gx[g] += p.w[i * 3 * H + g] * x[i];
-  for (int i = 0; i < H; i++)
-    for (int g = 0; g < 3 * H; g++) gh[g] += p.r[i * 3 * H + g] * h[i];
-  for (int j = 0; j < H; j++) {
-    float z = sigmoid(gx[j] + gh[j]);
-    float r = sigmoid(gx[H + j] + gh[H + j]);
-    float n = tanh_fast(gx[2 * H + j] + r * gh[2 * H + j]);
-    h[j] = (1 - z) * n + z * h[j];
-  }
 }
 
 /**
@@ -147,7 +36,7 @@ void gru(const Gru &p, int in_size, const float *x, float *h) {
 struct Block {
   int dilation, start; // its history: conv cache frames start .. start + 2 * dilation - 1
   const float *conv_w, *conv_b, *depth_w, *depth_b, *point_w, *point_b;
-  Gru tra;
+  Gru<16> tra;
   const float *gain_w, *gain_b;
   float conv_slope, depth_slope;
   float out[16][33];
@@ -258,7 +147,7 @@ void add_layer_norm(const float (*y)[16], const float *scale, const float *bias,
  * linear layer and a normalization, and added to its input.
  */
 struct DualPath {
-  Gru intra, inter;
+  Gru<16> intra, inter;
   const float *intra_fc_w, *intra_fc_b, *intra_scale, *intra_bias;
   const float *inter_fc_w, *inter_fc_b, *inter_scale, *inter_bias;
   float mid[33][16]; // after the band GRU: onnx::Transpose_1573 / onnx::Transpose_2121
@@ -433,18 +322,13 @@ struct Gtcrn {
 extern "C" {
 
 Gtcrn *gtcrn_create(const void *weights, size_t size) {
-  uint32_t count;
-  if (size < 4) return nullptr;
-  memcpy(&count, weights, 4);
-  size_t header = 4 + size_t(count) * 4;
-  if (size < header || (size - header) % 4) return nullptr;
-
   auto *m = new Gtcrn;
-  std::vector<uint32_t> sizes(count);
-  memcpy(sizes.data(), static_cast<const char *>(weights) + 4, count * 4);
-  m->weights.resize((size - header) / 4);
-  memcpy(m->weights.data(), static_cast<const char *>(weights) + header, size - header);
-  Reader r{sizes.data(), count, 0, m->weights.data(), m->weights.data() + m->weights.size()};
+  std::vector<uint32_t> sizes;
+  if (!read_weights(weights, size, sizes, m->weights)) {
+    delete m;
+    return nullptr;
+  }
+  Reader r{sizes.data(), uint32_t(sizes.size()), 0, m->weights.data(), m->weights.data() + m->weights.size()};
   if (!m->load(r)) {
     delete m;
     return nullptr;
