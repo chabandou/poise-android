@@ -94,7 +94,11 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.Hyphens
@@ -662,7 +666,7 @@ private fun ColumnScope.HomePage(
                     val load = stats?.let { if (voice) "${(it.rtf * 100).roundToInt()}%" else "Idle" } // the model's share of each frame
                     StatCell("Load", load, if (voice) pal.ink else pal.muted, cell, roll = !voice)
                     Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
-                    StatCell("Frame", stats?.takeIf { voice }?.let { "%.1f ms".format(it.avgTimeMs) }, pal.ink, cell)
+                    StatCell("Frame", stats?.takeIf { voice }?.let { "%.1f".format(it.avgTimeMs) }, pal.ink, cell, unit = "ms")
                     Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
                     StatCell("Voice", stats?.let { if (voice) "Yes" else "Quiet" }, if (voice) pal.secondary else pal.muted, cell, roll = true)
                 }
@@ -701,13 +705,23 @@ private fun StageTitle(motion: HomeMotion) {
 }
 
 @Composable
-private fun StatCell(label: String, value: String?, color: Color, modifier: Modifier, roll: Boolean = false) {
+private fun StatCell(label: String, value: String?, color: Color, modifier: Modifier, roll: Boolean = false, unit: String? = null) {
     val pal = LocalPalette.current
     val shown by animateColorAsState(if (value == null) pal.tick else color, tween(300), label = "stat")
     Column(modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.Center) {
         Text(label.uppercase(), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.2.em)
         val style = TextStyle(color = shown, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 22.sp)
-        if (roll || value == null) RollText(value ?: "—", style, alignment = Alignment.CenterStart) else Text(value, style = style)
+        if (roll || value == null) {
+            RollText(value ?: "—", style, alignment = Alignment.CenterStart)
+        } else {
+            // A small unit keeps "10.7 ms" on one line at the largest text size; past that it runs
+            // into the padding rather than wrap
+            val text = if (unit == null) AnnotatedString(value) else buildAnnotatedString {
+                append(value)
+                withStyle(SpanStyle(fontSize = 12.sp)) { append(" $unit") }
+            }
+            Text(text, style = style, maxLines = 1, softWrap = false, overflow = TextOverflow.Visible)
+        }
     }
 }
 
