@@ -96,6 +96,8 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -170,12 +172,16 @@ fun MainScreen(
         onAllowBattery: () -> Unit,
         onOpenNotificationSettings: () -> Unit,
         onAddTile: (() -> Unit)?, // null where Android cannot add tiles for apps
+        notice: Boolean,
+        onNoticeAccept: () -> Unit,
+        onNoticeDismiss: () -> Unit,
         language: String,
         onPickLanguage: (String) -> Unit,
         versionName: String,
         onOpenUrl: (String) -> Unit
 ) {
     val pal = LocalPalette.current
+    if (notice) StartNotice(onNoticeAccept, onNoticeDismiss)
     val buzz = rememberBuzz()
     // Android's "Remove animations" or Poise's own Reduce motion
     val reduceMotion by PoiseSettings.reduceMotion.collectAsState()
@@ -1032,6 +1038,7 @@ private fun SmallButton(text: String, icon: String, onClick: () -> Unit, armed: 
 
 private const val BATTERY = "M5 7H17A2 2 0 0 1 19 9V15A2 2 0 0 1 17 17H5A2 2 0 0 1 3 15V9A2 2 0 0 1 5 7Z M22 11v2M7 10v4M10.5 10v4"
 private const val PLUS = "M12 5v14M5 12h14"
+private const val CHECK = "M5 12.5l4.5 4.5L19 7"
 private const val THEME_FADE_MS = 300
 private const val RESET = "M4 12a8 8 0 1 0 2.34-5.66M4 4v4h4"
 
@@ -1235,6 +1242,25 @@ private fun ColumnScope.SettingsPage(
     }
 }
 
+/** Shown before the first session: music can pass through, so what plays is the listener's call. */
+@Composable
+private fun StartNotice(onAccept: () -> Unit, onDismiss: () -> Unit) {
+    val pal = LocalPalette.current
+    // The pages' own side margins, rather than the platform's dialog width
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+                Modifier.padding(horizontal = 18.dp).fillMaxWidth().panel(14.dp).padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally // as Title is
+        ) {
+            Title(stringResource(R.string.notice_title), size = 24)
+            Spacer(Modifier.height(10.dp))
+            Text(stringResource(R.string.disclaimer), color = pal.ink, fontSize = 14.sp, lineHeight = 21.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(16.dp))
+            SmallButton(stringResource(R.string.notice_understood), CHECK, onAccept)
+        }
+    }
+}
+
 /** Poise's language: the phone's (English when Poise doesn't have it), or one picked here. */
 @Composable
 private fun LanguageRow(language: String, onPick: (String) -> Unit) {
@@ -1338,6 +1364,15 @@ private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Un
                     LinkButton("GitHub", GITHUB) { onOpenUrl(GITHUB_URL) }
                     LinkButton(stringResource(R.string.report_issue), WARNING) { onOpenUrl("$GITHUB_URL/issues") }
                 }
+                Spacer(Modifier.height(16.dp))
+                Text(
+                        stringResource(R.string.disclaimer),
+                        Modifier.padding(horizontal = 8.dp),
+                        color = pal.muted,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Center
+                )
             }
         }
     }

@@ -53,6 +53,10 @@ object PoiseSettings {
     private val _updateChecks = MutableStateFlow(DEFAULT_UPDATE_CHECKS)
     val updateChecks: StateFlow<Boolean> = _updateChecks.asStateFlow()
 
+    /** Whether the notice that music can pass through was accepted, which the first Start asks for. */
+    var noticeSeen = false
+        private set
+
     /** The output picked on Home, or null to let Android route. The name shows while it's away. */
     data class Output(val key: String, val name: String)
 
@@ -71,6 +75,7 @@ object PoiseSettings {
         _haptics.value = p.getBoolean("haptics", _haptics.value)
         _reduceMotion.value = p.getBoolean("reduce_motion", _reduceMotion.value)
         _updateChecks.value = p.getBoolean("update_checks", _updateChecks.value)
+        noticeSeen = p.getBoolean("notice_seen", false)
         _output.value = p.getString("output_key", null)?.let { Output(it, p.getString("output_name", null) ?: "") }
         AudioServiceState.setOutputVolume(p.getFloat("volume", AudioServiceState.outputVolume.value))
         prefs = p
@@ -129,6 +134,11 @@ object PoiseSettings {
     fun setUpdateChecks(v: Boolean) {
         _updateChecks.value = v
         prefs?.edit()?.putBoolean("update_checks", v)?.apply()
+    }
+
+    fun markNoticeSeen() {
+        noticeSeen = true
+        prefs?.edit()?.putBoolean("notice_seen", true)?.apply()
     }
 
     fun setOutput(v: Output?) {

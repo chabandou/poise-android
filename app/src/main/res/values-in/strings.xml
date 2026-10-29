@@ -85,6 +85,9 @@
     <string name="about_credits">Peredam bising: GTCRN (Rong et al., 2024)\nDibuat dengan Kotlin dan C++</string>
     <string name="report_issue">Laporkan bug</string>
     <string name="emblem_description">Lambang Poise</string>
+    <string name="disclaimer">Poise tidak selalu bisa menghapus musik sepenuhnya. Dalam kondisi tertentu sebagian bisa lolos, terutama musik keras yang dekat dengan suara bicara. Kami tidak bisa menjamin audio yang dihasilkan diperbolehkan, gunakan penilaian Anda sendiri.</string>
+    <string name="notice_title">Sebelum mulai</string>
+    <string name="notice_understood">Mengerti</string>
     <string name="toast_permission_denied">Izin ditolak</string>
     <string name="toast_audio_required">Izin audio diperlukan</string>
     <string name="toast_tile_present">Kartu sudah ada di Setelan Cepat</string>

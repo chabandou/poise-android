@@ -86,6 +86,9 @@
     <string name="about_credits">حذف نویز: GTCRN (Rong et al., 2024)\nساخته‌شده با Kotlin و C++</string>
     <string name="report_issue">گزارش مشکل</string>
     <string name="emblem_description">نشان Poise</string>
+    <string name="disclaimer">Poise همیشه نمی‌تواند موسیقی را کاملاً حذف کند. در برخی موارد بخشی از آن عبور می‌کند، به‌ویژه موسیقی بلندی که به گفتار نزدیک است. نمی‌توانیم تضمین کنیم که صدای خروجی از نظر شرعی مجاز باشد، خودتان قضاوت کنید.</string>
+    <string name="notice_title">پیش از شروع</string>
+    <string name="notice_understood">متوجه شدم</string>
     <string name="toast_permission_denied">اجازه رد شد</string>
     <string name="toast_audio_required">اجازهٔ ضبط صدا لازم است</string>
     <string name="toast_tile_present">کاشی از قبل در تنظیمات سریع هست</string>

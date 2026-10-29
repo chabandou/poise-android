@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var pendingStart = false
+    private var showNotice by mutableStateOf(false)
     private var systemStatus by mutableStateOf(SystemStatus(false, false))
 
     private val mediaProjectionLauncher =
@@ -149,6 +150,13 @@ class MainActivity : ComponentActivity() {
                             )
                         },
                         onAddTile = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) ::requestAddTile else null,
+                        notice = showNotice,
+                        onNoticeAccept = {
+                            showNotice = false
+                            PoiseSettings.markNoticeSeen()
+                            startProcessing()
+                        },
+                        onNoticeDismiss = { showNotice = false },
                         language = language,
                         onPickLanguage = { language = it; AppLanguage.set(this, it) },
                         versionName = versionName,
@@ -204,6 +212,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startProcessing() {
+        // The first start asks to accept that music can pass through; accepting starts it
+        if (!PoiseSettings.noticeSeen) {
+            showNotice = true
+            return
+        }
         pendingStart = true
         AudioServiceState.setActive(true) // Immediate UI feedback
 

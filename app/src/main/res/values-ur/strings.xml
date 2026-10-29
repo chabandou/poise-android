@@ -86,6 +86,9 @@
     <string name="about_credits">شور کا خاتمہ: GTCRN (Rong et al., 2024)\nKotlin اور C++ سے بنایا گیا</string>
     <string name="report_issue">مسئلہ رپورٹ کریں</string>
     <string name="emblem_description">Poise کا نشان</string>
+    <string name="disclaimer">Poise ہمیشہ موسیقی کو مکمل طور پر نہیں ہٹا سکتا۔ بعض صورتوں میں کچھ حصہ گزر سکتا ہے، خاص طور پر تیز موسیقی جو گفتگو کے قریب ہو۔ ہم ضمانت نہیں دے سکتے کہ آنے والی آواز جائز ہے، اپنی سمجھ سے فیصلہ کریں۔</string>
+    <string name="notice_title">شروع کرنے سے پہلے</string>
+    <string name="notice_understood">ٹھیک ہے</string>
     <string name="toast_permission_denied">اجازت مسترد</string>
     <string name="toast_audio_required">آڈیو کی اجازت درکار ہے</string>
     <string name="toast_tile_present">ٹائل پہلے سے فوری ترتیبات میں ہے</string>

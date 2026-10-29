@@ -85,6 +85,9 @@
     <string name="about_credits">Penyahhingar: GTCRN (Rong et al., 2024)\nDibina dengan Kotlin dan C++</string>
     <string name="report_issue">Laporkan isu</string>
     <string name="emblem_description">Lambang Poise</string>
+    <string name="disclaimer">Poise tidak selalu dapat membuang muzik sepenuhnya. Dalam keadaan tertentu sebahagiannya boleh terlepas, terutamanya muzik kuat yang hampir dengan pertuturan. Kami tidak dapat menjamin audio yang dihasilkan dibenarkan, gunakan pertimbangan anda sendiri.</string>
+    <string name="notice_title">Sebelum bermula</string>
+    <string name="notice_understood">Faham</string>
     <string name="toast_permission_denied">Kebenaran ditolak</string>
     <string name="toast_audio_required">Kebenaran audio diperlukan</string>
     <string name="toast_tile_present">Jubin sudah ada dalam Tetapan Pantas</string>

@@ -114,6 +114,10 @@
     <string name="about_credits">Denoising: GTCRN (Rong et al., 2024)\nBuilt with Kotlin and C++</string>
     <string name="report_issue">Report an issue</string>
     <string name="emblem_description">Poise emblem</string>
+    <!-- Also shown once, before the first session -->
+    <string name="disclaimer">Poise can’t always completely remove music. In certain scenarios some can pass through, especially loud music that’s close to speech. We can’t guarantee that the output audio is permissible, use your own judgement.</string>
+    <string name="notice_title">Before you start</string>
+    <string name="notice_understood">Understood</string>
 
     <!-- Starting, from the app -->
     <string name="toast_permission_denied">Permission denied</string>

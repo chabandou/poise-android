@@ -90,6 +90,9 @@
     <string name="about_credits">إزالة الضوضاء: GTCRN (Rong et al., 2024)\nمبني بلغتي Kotlin وC++</string>
     <string name="report_issue">الإبلاغ عن مشكلة</string>
     <string name="emblem_description">شعار Poise</string>
+    <string name="disclaimer">لا يستطيع Poise دائمًا إزالة الموسيقى بالكامل. في بعض الحالات قد يمرّ جزء منها، خاصةً الموسيقى العالية القريبة من الكلام. لا يمكننا ضمان أن الصوت الناتج مباح، فاستخدم تقديرك.</string>
+    <string name="notice_title">قبل أن تبدأ</string>
+    <string name="notice_understood">فهمت</string>
     <string name="toast_permission_denied">رُفض الإذن</string>
     <string name="toast_audio_required">يلزم إذن الصوت</string>
     <string name="toast_tile_present">الاختصار موجود بالفعل في الإعدادات السريعة</string>

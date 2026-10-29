@@ -86,6 +86,9 @@
     <string name="about_credits">নয়েজ কমানো: GTCRN (Rong et al., 2024)\nKotlin ও C++ দিয়ে তৈরি</string>
     <string name="report_issue">সমস্যা জানান</string>
     <string name="emblem_description">Poise প্রতীক</string>
+    <string name="disclaimer">Poise সব সময় গান-বাজনা পুরোপুরি সরাতে পারে না। কিছু ক্ষেত্রে কিছুটা থেকে যেতে পারে, বিশেষ করে কথার কাছাকাছি জোরালো মিউজিক। আউটপুট অডিও জায়েজ কিনা আমরা নিশ্চয়তা দিতে পারি না, নিজের বিবেচনা কাজে লাগান।</string>
+    <string name="notice_title">শুরু করার আগে</string>
+    <string name="notice_understood">বুঝেছি</string>
     <string name="toast_permission_denied">অনুমতি প্রত্যাখ্যাত</string>
     <string name="toast_audio_required">অডিও অনুমতি প্রয়োজন</string>
     <string name="toast_tile_present">টাইলটি ইতিমধ্যে দ্রুত সেটিংসে আছে</string>

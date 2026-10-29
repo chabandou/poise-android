@@ -86,6 +86,9 @@
     <string name="about_credits">Gürültü giderme: GTCRN (Rong et al., 2024)\nKotlin ve C++ ile geliştirildi</string>
     <string name="report_issue">Sorun bildir</string>
     <string name="emblem_description">Poise amblemi</string>
+    <string name="disclaimer">Poise müziği her zaman tamamen kaldıramaz. Bazı durumlarda bir kısmı geçebilir, özellikle konuşmaya yakın yüksek sesli müzik. Çıkan sesin caiz olduğunu garanti edemeyiz, kendi muhakemenizi kullanın.</string>
+    <string name="notice_title">Başlamadan önce</string>
+    <string name="notice_understood">Anladım</string>
     <string name="toast_permission_denied">İzin reddedildi</string>
     <string name="toast_audio_required">Ses izni gerekli</string>
     <string name="toast_tile_present">Kutucuk zaten Hızlı Ayarlar’da</string>

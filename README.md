@@ -52,7 +52,7 @@
 
 Poise sits between your apps and your headphones. It captures what other apps play (YouTube, podcasts, streams), runs it through a neural speech model on the phone's CPU, and plays back only the voices. Press Start once and leave it running.
 
-- **Strips music, keeps speech.** DeepFilterNet3 removes instrumentals and background noise while leaving voices intact. A halal-friendly way to watch and listen to online content.
+- **Strips (or massively reduces) music, keeps speech.** DeepFilterNet3 removes instrumentals and background noise while leaving voices intact. A halal-friendly way to watch and listen to online content.
 - **Native, not a runtime.** Both models are hand-written C++ with their weights in the APK: no ONNX Runtime, a ~6 MB download, and ~2–3 ms of work per frame on a budget Snapdragon 685.
 - **Short path to your ears.** A 48 kHz low-latency output gets Android's fast mixer: about 95 ms from the app's sound to a wired output.
 - **Fits in the system.** Volume keys, a Quick Settings tile, a notification with volume and stop, auto-stop after silence and stop on unplug.
@@ -71,6 +71,9 @@ On **Start**, Android asks to share your screen: pick **Entire screen** and conf
 
 > [!TIP]
 > In **Settings → Setup**, allow **No battery limits** so a session survives the screen turning off, and add the **Quick tile** to start Poise from the shade. With **Update alerts** on, Poise checks GitHub once a day and notifies you when a new version is out.
+
+> [!IMPORTANT]
+> Poise can’t always completely remove music. In certain scenarios some can pass through, especially loud music that’s close to speech. We can’t guarantee that the output audio is permissible, use your own judgement.
 
 ## Models
 

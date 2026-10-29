@@ -87,6 +87,9 @@
     <string name="about_credits">Reducción de ruido: GTCRN (Rong et al., 2024)\nHecho con Kotlin y C++</string>
     <string name="report_issue">Reportar error</string>
     <string name="emblem_description">Emblema de Poise</string>
+    <string name="disclaimer">Poise no siempre puede eliminar la música por completo. En algunos casos parte puede pasar, sobre todo música alta cercana a la voz. No podemos garantizar que el audio resultante sea lícito, usa tu propio criterio.</string>
+    <string name="notice_title">Antes de empezar</string>
+    <string name="notice_understood">Entendido</string>
     <string name="toast_permission_denied">Permiso denegado</string>
     <string name="toast_audio_required">Se necesita permiso de audio</string>
     <string name="toast_tile_present">El acceso ya está en Ajustes rápidos</string>
