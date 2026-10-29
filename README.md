@@ -47,9 +47,7 @@
 </p>
 
 <p align="center">
-  <img src=".github/media/switch-on.webp" alt="Poise switching on: Standby, Start, then the dial lights up, the headline reads Isolating and the load, frame and voice readouts fill in" width="32%"/>
-  <img src=".github/media/home.webp" alt="Home while isolating: the volume dial, the picked Bluetooth output, and readouts of 16% load and 1.7 ms per frame" width="32%"/>
-  <img src=".github/media/settings.webp" alt="Settings: model DeepFilter, reduction strength −60 dB, silence threshold −40 dB" width="32%"/>
+  <img src=".github/media/switch-on.webp" alt="Poise switching on: Standby, Start, then the dial lights up, the headline reads Isolating and the load, frame and voice readouts fill in" width="320"/>
 </p>
 
 Poise sits between your apps and your headphones. It captures what other apps play (YouTube, podcasts, streams), runs it through a neural speech model on the phone's CPU, and plays back only the voices. Press Start once and leave it running.
