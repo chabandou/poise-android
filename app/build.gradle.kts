@@ -1,6 +1,13 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// The release key's location and passwords, kept out of git. Without it the release APK is unsigned
+val keystore = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { file ->
+    Properties().apply { file.inputStream().use { load(it) } }
 }
 
 android {
@@ -12,8 +19,8 @@ android {
         minSdk = 29  // Android 10+ required for AudioPlaybackCapture
         targetSdk = 34
         // Bump both for each release and tag it v<versionName>: the update check compares the tag
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -40,6 +47,15 @@ android {
         }
     }
 
+    signingConfigs {
+        if (keystore != null) create("release") {
+            storeFile = file(keystore.getProperty("storeFile"))
+            storePassword = keystore.getProperty("storePassword")
+            keyAlias = keystore.getProperty("keyAlias")
+            keyPassword = keystore.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         // en-XA (accented, longer) and ar-XB (right to left) show unextracted text and layout
         // that doesn't mirror, before any real translation
@@ -53,6 +69,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.findByName("release")
         }
         // Release code signed with the debug key: installs over the debug build to measure what users get
         create("benchmark") {
