@@ -13,6 +13,8 @@ add_library(poise_native SHARED
 )
 # The model runs every 16 ms, so debug builds need optimized code too (this comes after -O0)
 target_compile_options(poise_native PRIVATE -O2)
+# Loadable on phones with 16 KB pages (NDK r25 links for 4 KB)
+target_link_options(poise_native PRIVATE -Wl,-z,max-page-size=16384)
 
 # Link against Android libraries
 find_library(log-lib log)

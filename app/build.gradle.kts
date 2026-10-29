@@ -79,6 +79,11 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // Compressed, so Android extracts it at install and its zip alignment doesn't matter: this
+        // AGP aligns uncompressed libraries to 4 KB, not the 16 KB pages of newer phones
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
