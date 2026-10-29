@@ -218,7 +218,7 @@ The weights file is a little-endian `uint32` count, then each weight's size, the
 
 ### Releases
 
-Bump `versionCode` and `versionName` in [`app/build.gradle.kts`](app/build.gradle.kts) and tag the release `v<versionName>`: the update check compares that tag with the installed version. Sign every release with the same key, or Android refuses to install it over the last one.
+Bump `versionCode` and `versionName` in [`app/build.gradle.kts`](app/build.gradle.kts) and tag the release `v<versionName>`: the update check compares that tag with the installed version. Sign every release with the same key, or Android refuses to install it over the last one. `assembleRelease` signs with the key named in `keystore.properties` at the repo root (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`), which git ignores. Without that file the APK comes out unsigned.
 
 ### Layout
 
@@ -263,6 +263,9 @@ scripts/                         # dev.sh, native-df3.py, native-gtcrn.py
 | [DeepFilterNet3](https://github.com/Rikorose/DeepFilterNet) | Hendrik Schröter (Rikorose) |
 | [GTCRN](https://github.com/Xiaobin-Rong/gtcrn) | Xiaobin Rong (MIT; official streaming export) |
 
+## License
+
+[MIT](LICENSE)
 
 ## Contributing
 
