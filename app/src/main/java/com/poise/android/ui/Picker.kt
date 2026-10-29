@@ -1,5 +1,8 @@
 package com.poise.android.ui
 
+import android.os.Build
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -23,6 +26,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +35,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -121,6 +126,17 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
     }
 
     Popup(popupPositionProvider = provider, onDismissRequest = ::close, properties = PopupProperties(focusable = true)) {
+        // Android 13+ hands Back to the popup's own window as a callback, which this Compose's
+        // Popup only takes as a key press; older Android still sends the key
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val view = LocalView.current
+            DisposableEffect(view) {
+                val dispatcher = view.findOnBackInvokedDispatcher()
+                val back = OnBackInvokedCallback { close() }
+                dispatcher?.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, back)
+                onDispose { dispatcher?.unregisterOnBackInvokedCallback(back) }
+            }
+        }
         val panelShape = RoundedCornerShape(10.dp)
         Column(
                 Modifier.padding(ROOM)
