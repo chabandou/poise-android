@@ -1408,20 +1408,15 @@ private fun NavBar(page: Page, position: () -> Float, dip: () -> Float, onSelect
                         .height(72.dp)
                         .selectableGroup()
                         .drawBehind {
-                            val pad = 12.dp.toPx()
-                            val gap = 8.dp.toPx()
-                            val n = Page.values().size
-                            val slot = (size.width - 2 * pad - (n - 1) * gap) / n
+                            val slot = size.width / Page.values().size
                             val h = size.height * (1f - 0.4f * dip())
-                            val x = pad + position() * (slot + gap)
+                            val x = position() * slot
                             drawRect(
                                     Brush.verticalGradient(listOf(Color.Transparent, pal.accentWash), startY = size.height - h, endY = size.height),
                                     Offset(if (layoutDirection == LayoutDirection.Rtl) size.width - x - slot else x, size.height - h),
                                     Size(slot, h)
                             )
                         }
-                        .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             for (p in Page.values()) {
                 val on = p == page
