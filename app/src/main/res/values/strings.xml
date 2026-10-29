@@ -1,3 +1,128 @@
 <resources>
     <string name="app_name">Poise</string>
+
+    <!-- Tabs -->
+    <string name="tab_home">Home</string>
+    <string name="tab_settings">Settings</string>
+    <string name="tab_about">About</string>
+
+    <!-- Home: the stage's title -->
+    <string name="stage_standby">Standby</string>
+    <string name="stage_starting">Starting</string>
+    <string name="stage_isolating">Isolating</string>
+
+    <!-- Home: the dial. Short: drawn inside it -->
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="dial_volume">volume</string>
+    <string name="dial_quiet">quiet</string>
+    <string name="dial_loud">loud</string>
+    <string name="dial_start_description">Start isolating</string>
+    <string name="dial_stop_description">Stop isolating</string>
+    <string name="volume_percent">Volume %1$d%%</string>
+
+    <!-- Home: the stats under the dial. Labels are shown in capitals -->
+    <string name="stat_load">Load</string>
+    <!-- Load while nothing is playing -->
+    <string name="stat_idle">Idle</string>
+    <string name="stat_frame">Frame</string>
+    <string name="stat_voice">Voice</string>
+    <string name="stat_voice_yes">Yes</string>
+    <string name="stat_voice_quiet">Quiet</string>
+
+    <!-- Home: why the last session ended by itself, under the label "Stopped" -->
+    <string name="stat_stopped">Stopped</string>
+    <string name="stop_output_disconnected">Output disconnected</string>
+    <string name="stop_sharing_ended">Sharing ended</string>
+    <string name="stop_capture_ended">Capture ended</string>
+    <string name="stop_capture_failed">Capture failed</string>
+    <!-- %1$s is a duration: "1 hour" or "15 min" -->
+    <string name="stop_silent">Silent for %1$s</string>
+
+    <!-- Home: where Poise plays -->
+    <string name="output">Output</string>
+    <string name="output_automatic">Automatic</string>
+    <string name="output_pick_away">Pick not connected</string>
+    <string name="output_picked">Picked by you</string>
+    <string name="output_phone_speaker">Phone speaker</string>
+    <string name="output_headphones">Headphones</string>
+    <string name="output_built_in">Built-in</string>
+    <string name="output_wired">Wired</string>
+
+    <!-- Settings: Isolation -->
+    <string name="caption_isolation">Isolation</string>
+    <string name="model">Model</string>
+    <string name="model_gtcrn_note">Lighter, for older phones</string>
+    <string name="model_df3_note">Fuller, more natural sound</string>
+    <string name="model_next_start">Applies from the next start</string>
+    <string name="strength">Reduction strength</string>
+    <string name="strength_note">How much noise is removed</string>
+    <string name="strength_gentle">gentle</string>
+    <string name="strength_strong">strong</string>
+    <string name="silence">Silence threshold</string>
+    <string name="silence_note">Quieter sound is skipped</string>
+
+    <!-- Settings: Session -->
+    <string name="caption_session">Session</string>
+    <string name="auto_stop">Auto-stop</string>
+    <string name="auto_stop_note">After this long in silence</string>
+    <string name="auto_stop_never">Never</string>
+    <string name="duration_hour">1 hour</string>
+    <plurals name="duration_minutes">
+        <item quantity="one">%d min</item>
+        <item quantity="other">%d min</item>
+    </plurals>
+    <string name="stop_on_unplug">Stop on unplug</string>
+
+    <!-- Settings: Look and feel -->
+    <string name="caption_look">Look and feel</string>
+    <string name="haptics">Haptics</string>
+    <string name="haptics_note">Dial ticks and button taps</string>
+    <string name="reduce_motion">Reduce motion</string>
+    <string name="reduce_motion_note">Keeps the dial still</string>
+
+    <!-- Settings: Setup -->
+    <string name="caption_setup">Setup</string>
+    <string name="battery">No battery limits</string>
+    <string name="battery_note">Runs with screen off</string>
+    <string name="allowed">Allowed</string>
+    <string name="allow">Allow</string>
+    <string name="notifications">Notifications</string>
+    <string name="notifications_note">For the stop button</string>
+    <string name="tile">Quick tile</string>
+    <string name="tile_note">Start from the shade</string>
+    <string name="tile_add">Add tile</string>
+    <string name="update_alerts">Update alerts</string>
+    <string name="update_alerts_note">Checks GitHub once a day</string>
+
+    <!-- Settings: Reset -->
+    <string name="reset_title">Reset to defaults</string>
+    <string name="reset_note">Isolation, session and look</string>
+    <string name="reset_confirm_note">Tap again to reset</string>
+    <string name="reset_default">Default</string>
+    <string name="reset">Reset</string>
+    <string name="reset_confirm">Confirm</string>
+
+    <!-- About -->
+    <string name="about_tagline">Voice isolation, 100% on-device</string>
+    <string name="about_credits">Denoising: GTCRN (Rong et al., 2024)\nBuilt with Kotlin and C++</string>
+    <string name="report_issue">Report an issue</string>
+    <string name="emblem_description">Poise emblem</string>
+
+    <!-- Starting, from the app -->
+    <string name="toast_permission_denied">Permission denied</string>
+    <string name="toast_audio_required">Audio permission required</string>
+    <string name="toast_tile_present">The tile is already in Quick Settings</string>
+
+    <!-- Notifications -->
+    <string name="channel_session">Audio Processing</string>
+    <string name="channel_session_note">Shows when Poise is processing audio</string>
+    <string name="notification_isolating">Isolating voices</string>
+    <string name="volume_down">Volume −</string>
+    <string name="volume_up">Volume +</string>
+    <string name="channel_updates">Updates</string>
+    <string name="channel_updates_note">When a new version of Poise is out</string>
+    <!-- %1$s is a version number, like 1.0.2 -->
+    <string name="update_title">Poise %1$s is out</string>
+    <string name="update_text">Tap to see what\'s new and download it</string>
 </resources>

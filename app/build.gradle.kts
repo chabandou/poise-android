@@ -35,7 +35,17 @@ android {
         }
     }
 
+    // Lists the app's languages for Android 13+'s per-app language setting
+    androidResources {
+        generateLocaleConfig = true
+    }
+
     buildTypes {
+        // en-XA (accented, longer) and ar-XB (right to left) show unextracted text and layout
+        // that doesn't mirror, before any real translation
+        debug {
+            isPseudoLocalesEnabled = true
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

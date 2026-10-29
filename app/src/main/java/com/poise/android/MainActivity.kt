@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
                     startAudioCaptureService(result.resultCode, result.data!!)
                 } else {
                     AudioServiceState.setActive(false)
-                    Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.toast_permission_denied), Toast.LENGTH_SHORT).show()
                 }
             }
 
@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
                     requestMediaProjection()
                 } else if (!isGranted) {
                     AudioServiceState.setActive(false)
-                    Toast.makeText(this, "Audio permission required", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.toast_audio_required), Toast.LENGTH_SHORT).show()
                 }
                 pendingStart = false
             }
@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
                 mainExecutor
         ) { result ->
             if (result == StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED) {
-                Toast.makeText(this, "The tile is already in Quick Settings", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_tile_present), Toast.LENGTH_SHORT).show()
             }
         }
     }

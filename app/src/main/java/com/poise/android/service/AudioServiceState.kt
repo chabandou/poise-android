@@ -29,8 +29,8 @@ object AudioServiceState {
     }
 
     // Why the last session ended, when it ended by itself; cleared by the next start
-    private val _stopNote = MutableStateFlow<String?>(null)
-    val stopNote: StateFlow<String?> = _stopNote.asStateFlow()
+    private val _stopNote = MutableStateFlow<StopReason?>(null)
+    val stopNote: StateFlow<StopReason?> = _stopNote.asStateFlow()
 
     fun setActive(active: Boolean) {
         _isActive.value = active
@@ -38,7 +38,7 @@ object AudioServiceState {
     }
 
     /** Records why the session is ending. The first reason wins: the rest follow from it. */
-    fun noteStop(why: String) {
+    fun noteStop(why: StopReason) {
         if (_stopNote.value == null) _stopNote.value = why
     }
 
@@ -59,4 +59,13 @@ object AudioServiceState {
         _stats.value = null
         _routedOutput.value = null
     }
+}
+
+/** Why a session ended by itself; the UI words it in the current language. */
+sealed interface StopReason {
+    data object OutputDisconnected : StopReason
+    data object SharingEnded : StopReason
+    data object CaptureEnded : StopReason
+    data object CaptureFailed : StopReason
+    data class Silent(val minutes: Int) : StopReason
 }

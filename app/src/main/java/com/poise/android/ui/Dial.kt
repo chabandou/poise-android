@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.unit.Dp
+import com.poise.android.R
 import com.poise.android.ui.theme.LocalPalette
 import com.poise.android.ui.theme.Rajdhani
 import kotlin.math.PI
@@ -506,8 +508,8 @@ internal fun Dial(
     val power by animateFloatAsState(if (phase == Phase.Live) 1f else 0f, tween(paced(600)), label = "power")
 
     // Start/Stop rolls: the old word rises away as the new one comes up
-    val word = if (phase == Phase.Idle) "Start" else "Stop"
-    var oldWord by remember { mutableStateOf<String?>(null) }
+    val word = phase == Phase.Idle // Start, or Stop
+    var oldWord by remember { mutableStateOf<Boolean?>(null) }
     var newWord by remember { mutableStateOf(word) }
     val wordT = remember { Animatable(1f) }
     LaunchedEffect(word) {
@@ -552,14 +554,18 @@ internal fun Dial(
         toggleNow()
     }
 
-    val texts = remember(size, density) { DialText(measurer, size.value * density.density / 300f, density) }
+    val words = listOf(R.string.start, R.string.stop, R.string.dial_volume, R.string.dial_quiet, R.string.dial_loud).map { stringResource(it) }
+    val texts = remember(size, density, words) { DialText(measurer, size.value * density.density / 300f, density, words) }
+    val startDescription = stringResource(R.string.dial_start_description)
+    val stopDescription = stringResource(R.string.dial_stop_description)
+    val volumeDescription = stringResource(R.string.volume_percent, percent)
 
     Canvas(
             Modifier.size(size)
                     .graphicsLayer() // its own layer, so each frame redraws only the dial
                     .semantics {
-                        contentDescription = if (phase == Phase.Idle) "Start isolating" else "Stop isolating"
-                        stateDescription = "Volume $percent%"
+                        contentDescription = if (phase == Phase.Idle) startDescription else stopDescription
+                        stateDescription = volumeDescription
                         progressBarRangeInfo = ProgressBarRangeInfo(volume, 0f..1f)
                         setProgress { onVolumeChange(it.coerceIn(0f, 1f)); true }
                         onClick { toggle(); true }
@@ -712,7 +718,7 @@ internal fun Dial(
 }
 
 /** The dial's text, laid out once per size; colours are given when drawn, so themes don't re-measure. */
-private class DialText(measurer: TextMeasurer, private val s: Float, private val density: Density) {
+private class DialText(measurer: TextMeasurer, private val s: Float, private val density: Density, words: List<String>) {
     private fun style(px: Float, rajdhani: Boolean) = TextStyle(
             fontSize = with(density) { (px * s).toSp() },
             fontFamily = if (rajdhani) Rajdhani else FontFamily.Default,
@@ -722,13 +728,13 @@ private class DialText(measurer: TextMeasurer, private val s: Float, private val
     private val big = style(30f, true)
     val digits = List(10) { measurer.measure("$it", big) }
     val percent = measurer.measure("%", big)
-    private val start = measurer.measure("Start", style(21f, true))
-    private val stop = measurer.measure("Stop", style(21f, true))
-    val volume = measurer.measure("volume", style(14f, false))
-    val quiet = measurer.measure("quiet", style(12f, false))
-    val loud = measurer.measure("loud", style(12f, false))
+    private val start = measurer.measure(words[0], style(21f, true))
+    private val stop = measurer.measure(words[1], style(21f, true))
+    val volume = measurer.measure(words[2], style(14f, false))
+    val quiet = measurer.measure(words[3], style(12f, false))
+    val loud = measurer.measure(words[4], style(12f, false))
 
-    fun word(w: String) = if (w == "Start") start else stop
+    fun word(start: Boolean) = if (start) this.start else stop
 }
 
 /**

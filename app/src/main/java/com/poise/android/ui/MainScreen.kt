@@ -4,6 +4,7 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
@@ -52,6 +53,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
@@ -82,6 +84,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -109,11 +113,13 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.poise.android.R
 import com.poise.android.audio.ProcessingStats
 import com.poise.android.audio.outputKey
 import com.poise.android.audio.pickableOutputs
 import com.poise.android.service.AudioServiceState
 import com.poise.android.service.PoiseSettings
+import com.poise.android.service.StopReason
 import com.poise.android.service.UpdateCheckService
 import com.poise.android.ui.theme.LocalPalette
 import com.poise.android.ui.theme.crossfade
@@ -136,7 +142,7 @@ import kotlinx.coroutines.launch
 /** What Android allows Poise to do, read again each time the app comes back. */
 data class SystemStatus(val batteryUnrestricted: Boolean, val notificationsAllowed: Boolean)
 
-private enum class Page { Home, Settings, About }
+private enum class Page(@StringRes val label: Int) { Home(R.string.tab_home), Settings(R.string.tab_settings), About(R.string.tab_about) }
 
 private const val GITHUB_URL = "https://github.com/chabandou/poise-android"
 
@@ -570,15 +576,27 @@ private fun modelLabel(model: PoiseSettings.Model) = when (model) {
     PoiseSettings.Model.DF3 -> "DeepFilter" // DeepFilterNet 3; the full name overflows the picker
 }
 
+@Composable
 private fun modelNote(model: PoiseSettings.Model) = when (model) {
-    PoiseSettings.Model.GTCRN -> "Lighter, for older phones"
-    PoiseSettings.Model.DF3 -> "Fuller, more natural sound"
+    PoiseSettings.Model.GTCRN -> stringResource(R.string.model_gtcrn_note)
+    PoiseSettings.Model.DF3 -> stringResource(R.string.model_df3_note)
 }
 
-private fun autoStopLabel(minutes: Int) = when {
-    minutes == 0 -> "Never"
-    minutes == 60 -> "1 hour"
-    else -> "$minutes min"
+@Composable
+@OptIn(ExperimentalComposeUiApi::class)
+private fun duration(minutes: Int) =
+        if (minutes == 60) stringResource(R.string.duration_hour) else pluralStringResource(R.plurals.duration_minutes, minutes, minutes)
+
+@Composable
+private fun autoStopLabel(minutes: Int) = if (minutes == 0) stringResource(R.string.auto_stop_never) else duration(minutes)
+
+@Composable
+private fun stopLabel(why: StopReason) = when (why) {
+    StopReason.OutputDisconnected -> stringResource(R.string.stop_output_disconnected)
+    StopReason.SharingEnded -> stringResource(R.string.stop_sharing_ended)
+    StopReason.CaptureEnded -> stringResource(R.string.stop_capture_ended)
+    StopReason.CaptureFailed -> stringResource(R.string.stop_capture_failed)
+    is StopReason.Silent -> stringResource(R.string.stop_silent, duration(why.minutes))
 }
 
 @Composable
@@ -659,16 +677,19 @@ private fun ColumnScope.HomePage(
             Row(Modifier.fillMaxSize()) {
                 val cell = Modifier.weight(1f).fillMaxHeight()
                 if (note != null) {
-                    StatCell("Stopped", note, pal.secondary, cell)
+                    StatCell(stringResource(R.string.stat_stopped), stopLabel(note), pal.secondary, cell)
                 } else {
                     val voice = stats?.isVadDetected == true
+                    val idle = stringResource(R.string.stat_idle)
                     // Quiet frames skip the model, so its numbers would only hold their last value
-                    val load = stats?.let { if (voice) "${(it.rtf * 100).roundToInt()}%" else "Idle" } // the model's share of each frame
-                    StatCell("Load", load, if (voice) pal.ink else pal.muted, cell, roll = !voice)
+                    val load = stats?.let { if (voice) "${(it.rtf * 100).roundToInt()}%" else idle } // the model's share of each frame
+                    StatCell(stringResource(R.string.stat_load), load, if (voice) pal.ink else pal.muted, cell, roll = !voice)
                     Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
-                    StatCell("Frame", stats?.takeIf { voice }?.let { "%.1f".format(it.avgTimeMs) }, pal.ink, cell, unit = "ms")
+                    StatCell(stringResource(R.string.stat_frame), stats?.takeIf { voice }?.let { "%.1f".format(it.avgTimeMs) }, pal.ink, cell, unit = "ms")
                     Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
-                    StatCell("Voice", stats?.let { if (voice) "Yes" else "Quiet" }, if (voice) pal.secondary else pal.muted, cell, roll = true)
+                    val yes = stringResource(R.string.stat_voice_yes)
+                    val quiet = stringResource(R.string.stat_voice_quiet)
+                    StatCell(stringResource(R.string.stat_voice), stats?.let { if (voice) yes else quiet }, if (voice) pal.secondary else pal.muted, cell, roll = true)
                 }
             }
         }
@@ -689,10 +710,10 @@ private fun StageTitle(motion: HomeMotion) {
             label = "title"
     ) { p ->
         when (p) {
-            Phase.Idle -> Title("Standby")
-            Phase.Live -> Title("Isolating")
+            Phase.Idle -> Title(stringResource(R.string.stage_standby))
+            Phase.Live -> Title(stringResource(R.string.stage_isolating))
             Phase.Starting -> Row(verticalAlignment = Alignment.Bottom) {
-                Title("Starting")
+                Title(stringResource(R.string.stage_starting))
                 for (k in 1..3) {
                     Canvas(Modifier.padding(start = 3.dp, bottom = 9.dp).size(5.dp).graphicsLayer()) {
                         val lit = motion.comet(k * TICKS / 4)
@@ -738,27 +759,28 @@ private fun OutputRow() {
     val playing = routed.takeIf { active } ?: pickedHere
             ?: outputs.firstOrNull { it.type != AudioDeviceInfo.TYPE_BUILTIN_SPEAKER } ?: outputs.firstOrNull()
     val subtitle = when {
-        picked == null -> "Automatic"
-        pickedHere == null -> "Pick not connected"
-        else -> "Picked by you"
+        picked == null -> stringResource(R.string.output_automatic)
+        pickedHere == null -> stringResource(R.string.output_pick_away)
+        else -> stringResource(R.string.output_picked)
     }
     var choosing by remember { mutableStateOf(false) }
     val source = remember { MutableInteractionSource() }
     Box {
         val pick = Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }
-        SettingRow("Output", subtitle, pick, trailingWeight = 1.4f) {
+        SettingRow(stringResource(R.string.output), subtitle, pick, trailingWeight = 1.4f) {
             // The name on one line, cut short if it must, and what kind of output under it
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-                RowValue(playing?.let(::outputName) ?: "—")
-                RollText(playing?.let(::outputKind) ?: "", TextStyle(color = LocalPalette.current.muted, fontSize = 12.sp, lineHeight = 16.sp))
+                RowValue(playing?.let { outputName(it) } ?: "—")
+                RollText(playing?.let { outputKind(it) } ?: "", TextStyle(color = LocalPalette.current.muted, fontSize = 12.sp, lineHeight = 16.sp))
             }
         }
         if (choosing) {
             // A pick that's away stays listed, so it shows as the current one
             val choices = listOf(null) + outputs.map { PoiseSettings.Output(it.outputKey, outputName(it)) } +
                     listOfNotNull(picked.takeIf { pickedHere == null })
+            val automatic = stringResource(R.string.output_automatic)
             CardPicker(
-                    choices.map { it?.name ?: "Automatic" },
+                    choices.map { it?.name ?: automatic },
                     choices.indexOfFirst { it?.key == picked?.key },
                     { PoiseSettings.setOutput(choices[it]) },
                     { choosing = false }
@@ -767,16 +789,18 @@ private fun OutputRow() {
     }
 }
 
+@Composable
 private fun outputName(device: AudioDeviceInfo) = when (device.type) {
-    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Phone speaker"
-    AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Headphones"
+    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> stringResource(R.string.output_phone_speaker)
+    AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> stringResource(R.string.output_headphones)
     // Bluetooth and USB devices carry their own name
-    else -> device.productName.toString().ifBlank { "Headphones" }
+    else -> device.productName.toString().ifBlank { stringResource(R.string.output_headphones) }
 }
 
+@Composable
 private fun outputKind(device: AudioDeviceInfo) = when (device.type) {
-    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Built-in"
-    AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Wired"
+    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> stringResource(R.string.output_built_in)
+    AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> stringResource(R.string.output_wired)
     AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> "USB"
     else -> "Bluetooth"
 }
@@ -1011,20 +1035,21 @@ private fun ColumnScope.SettingsPage(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Title("Settings")
+        Title(stringResource(R.string.tab_settings))
 
-        Caption("Isolation")
+        Caption(stringResource(R.string.caption_isolation))
         Column(Modifier.panel()) {
             // The pipeline takes the model when it starts, so a change waits for the next session
             var choosing by remember { mutableStateOf(false) }
             val source = remember { MutableInteractionSource() }
             Box {
-                val subtitle = if (active) "Applies from the next start" else modelNote(model)
+                val nextStart = stringResource(R.string.model_next_start)
+                val subtitle = if (active) nextStart else modelNote(model)
                 // Sized for every model's name and note, so picking one doesn't resize the row
                 val models = PoiseSettings.Model.entries
                 SettingRow(
-                        "Model", subtitle, Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true },
-                        subtitleRoom = models.map(::modelNote) + "Applies from the next start"
+                        stringResource(R.string.model), subtitle, Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true },
+                        subtitleRoom = models.map { modelNote(it) } + nextStart
                 ) {
                     Box(contentAlignment = Alignment.CenterEnd) {
                         for (m in models) Room { RowValue(modelLabel(m)) }
@@ -1043,28 +1068,28 @@ private fun ColumnScope.SettingsPage(
             }
         }
         SliderCard(
-                "Reduction strength", "How much noise is removed",
+                stringResource(R.string.strength), stringResource(R.string.strength_note),
                 PoiseSettings.reductionDb(strength).roundToInt(), "dB",
-                strength, 0f..1f, "gentle" to "strong"
+                strength, 0f..1f, stringResource(R.string.strength_gentle) to stringResource(R.string.strength_strong)
         ) { PoiseSettings.setStrength((it * 54).roundToInt() / 54f) } // in 1 dB steps
         SliderCard(
-                "Silence threshold", "Quieter sound is skipped",
+                stringResource(R.string.silence), stringResource(R.string.silence_note),
                 silenceDb, "dB",
                 silenceDb.toFloat(), -70f..-30f, "-70 dB" to "-30 dB"
         ) { PoiseSettings.setSilenceDb(it.roundToInt()) }
 
-        Caption("Session")
+        Caption(stringResource(R.string.caption_session))
         Column(Modifier.panel()) {
             var choosing by remember { mutableStateOf(false) }
             val source = remember { MutableInteractionSource() }
             Box {
-                SettingRow("Auto-stop", "After this long in silence", Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }) {
+                SettingRow(stringResource(R.string.auto_stop), stringResource(R.string.auto_stop_note), Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }) {
                     RowValue(autoStopLabel(autoStop))
                 }
                 if (choosing) {
                     val choices = PoiseSettings.AUTO_STOP_MINUTES
                     CardPicker(
-                            choices.map(::autoStopLabel),
+                            choices.map { autoStopLabel(it) },
                             choices.indexOf(autoStop),
                             { PoiseSettings.setAutoStopMinutes(choices[it]) },
                             { choosing = false }
@@ -1072,10 +1097,10 @@ private fun ColumnScope.SettingsPage(
                 }
             }
             RowDivider()
-            SwitchRow("Stop on unplug", "Output disconnected", stopOnUnplug, PoiseSettings::setStopOnUnplug)
+            SwitchRow(stringResource(R.string.stop_on_unplug), stringResource(R.string.stop_output_disconnected), stopOnUnplug, PoiseSettings::setStopOnUnplug)
         }
 
-        Caption("Look and feel")
+        Caption(stringResource(R.string.caption_look))
         // One gold ring glides from the old swatch to the new one, sinking a little on the way,
         // while the old colours dissolve into the new
         val ringAt = remember { Animatable(themeSlot(theme), Offset.VectorConverter, Offset(0.01f, 0.01f)) }
@@ -1126,28 +1151,28 @@ private fun ColumnScope.SettingsPage(
             }
         }
         Column(Modifier.panel()) {
-            SwitchRow("Haptics", "Dial ticks and button taps", haptics, PoiseSettings::setHaptics)
+            SwitchRow(stringResource(R.string.haptics), stringResource(R.string.haptics_note), haptics, PoiseSettings::setHaptics)
             RowDivider()
-            SwitchRow("Reduce motion", "Keeps the dial still", reduceMotion, PoiseSettings::setReduceMotion)
+            SwitchRow(stringResource(R.string.reduce_motion), stringResource(R.string.reduce_motion_note), reduceMotion, PoiseSettings::setReduceMotion)
         }
 
-        Caption("Setup")
+        Caption(stringResource(R.string.caption_setup))
         Column(Modifier.panel()) {
-            SettingRow("No battery limits", "Runs with screen off") {
-                if (system.batteryUnrestricted) RowValue("Allowed") else SmallButton("Allow", BATTERY, onAllowBattery)
+            SettingRow(stringResource(R.string.battery), stringResource(R.string.battery_note)) {
+                if (system.batteryUnrestricted) RowValue(stringResource(R.string.allowed)) else SmallButton(stringResource(R.string.allow), BATTERY, onAllowBattery)
             }
             RowDivider()
-            SettingRow("Notifications", "For the stop button") {
-                if (system.notificationsAllowed) RowValue("Allowed") else SmallButton("Allow", PLUS, onOpenNotificationSettings)
+            SettingRow(stringResource(R.string.notifications), stringResource(R.string.notifications_note)) {
+                if (system.notificationsAllowed) RowValue(stringResource(R.string.allowed)) else SmallButton(stringResource(R.string.allow), PLUS, onOpenNotificationSettings)
             }
             if (onAddTile != null) {
                 RowDivider()
-                SettingRow("Quick tile", "Start from the shade") {
-                    SmallButton("Add tile", PLUS, onAddTile)
+                SettingRow(stringResource(R.string.tile), stringResource(R.string.tile_note)) {
+                    SmallButton(stringResource(R.string.tile_add), PLUS, onAddTile)
                 }
             }
             RowDivider()
-            SwitchRow("Update alerts", "Checks GitHub once a day", updateChecks) {
+            SwitchRow(stringResource(R.string.update_alerts), stringResource(R.string.update_alerts_note), updateChecks) {
                 PoiseSettings.setUpdateChecks(it)
                 UpdateCheckService.schedule(context, it)
             }
@@ -1167,9 +1192,9 @@ private fun ColumnScope.SettingsPage(
                     confirming = false
                 }
             }
-            SettingRow("Reset to defaults", if (confirming) "Tap again to reset" else "Isolation, session and look") {
-                if (atDefaults) RowValue("Default")
-                else SmallButton(if (confirming) "Confirm" else "Reset", RESET, armed = confirming, onClick = {
+            SettingRow(stringResource(R.string.reset_title), stringResource(if (confirming) R.string.reset_confirm_note else R.string.reset_note)) {
+                if (atDefaults) RowValue(stringResource(R.string.reset_default))
+                else SmallButton(stringResource(if (confirming) R.string.reset_confirm else R.string.reset), RESET, armed = confirming, onClick = {
                     if (confirming) PoiseSettings.resetToDefaults()
                     confirming = !confirming
                 })
@@ -1232,10 +1257,10 @@ private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Un
         Title("Poise Voice Isolator", size = 30)
         Text("v$versionName", color = pal.secondary, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         Spacer(Modifier.height(4.dp))
-        Text("Voice isolation, 100% on-device", color = pal.ink, fontSize = 14.sp, textAlign = TextAlign.Center)
+        Text(stringResource(R.string.about_tagline), color = pal.ink, fontSize = 14.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(10.dp))
         Text(
-                "Denoising: GTCRN (Rong et al., 2024)\nBuilt with Kotlin and C++",
+                stringResource(R.string.about_credits),
                 color = pal.muted,
                 fontSize = 13.sp,
                 lineHeight = 22.sp,
@@ -1244,7 +1269,7 @@ private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Un
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             LinkButton("GitHub", GITHUB) { onOpenUrl(GITHUB_URL) }
-            LinkButton("Report an issue", WARNING) { onOpenUrl("$GITHUB_URL/issues") }
+            LinkButton(stringResource(R.string.report_issue), WARNING) { onOpenUrl("$GITHUB_URL/issues") }
         }
     }
 }
@@ -1322,7 +1347,7 @@ private fun NavBar(page: Page, position: () -> Float, dip: () -> Float, onSelect
                         Page.About -> PathIcon(ABOUT_ICON, 256f, 22.dp, iconColor)
                     }
                     Spacer(Modifier.height(3.dp))
-                    Text(p.name, color = textColor, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 0.04.em)
+                    Text(stringResource(p.label), color = textColor, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 0.04.em)
                 }
             }
         }

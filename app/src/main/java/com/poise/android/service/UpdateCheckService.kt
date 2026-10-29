@@ -87,8 +87,8 @@ class UpdateCheckService : JobService() {
     private fun notify(version: String) {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Updates", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "When a new version of Poise is out"
+                NotificationChannel(CHANNEL_ID, getString(R.string.channel_updates), NotificationManager.IMPORTANCE_LOW).apply {
+                    description = getString(R.string.channel_updates_note)
                 }
         )
         val open = PendingIntent.getActivity(
@@ -99,8 +99,8 @@ class UpdateCheckService : JobService() {
                 NotificationCompat.Builder(this, CHANNEL_ID)
                         .setSmallIcon(R.drawable.ic_wave)
                         .setColor(ContextCompat.getColor(this, R.color.poise_cyan))
-                        .setContentTitle("Poise $version is out")
-                        .setContentText("Tap to see what's new and download it")
+                        .setContentTitle(getString(R.string.update_title, version))
+                        .setContentText(getString(R.string.update_text))
                         .setContentIntent(open)
                         .setAutoCancel(true)
                         .build()

@@ -111,7 +111,7 @@ class AudioCaptureService : Service() {
                     if (!PoiseSettings.stopOnUnplug.value || audioPipeline == null) return
                     if (PoiseSettings.output.value?.key?.startsWith("${AudioDeviceInfo.TYPE_BUILTIN_SPEAKER}:") == true) return
                     Log.i(TAG, "Output disconnected, stopping")
-                    AudioServiceState.noteStop("Output disconnected")
+                    AudioServiceState.noteStop(StopReason.OutputDisconnected)
                     stopCapture()
                 }
             }
@@ -207,7 +207,7 @@ class AudioCaptureService : Service() {
                     override fun onStop() {
                         if (audioPipeline != null) {
                             Log.i(TAG, "Projection stopped by the system")
-                            AudioServiceState.noteStop("Sharing ended")
+                            AudioServiceState.noteStop(StopReason.SharingEnded)
                             stopCapture()
                         }
                     }
@@ -241,7 +241,7 @@ class AudioCaptureService : Service() {
                 pipeline.isRunning.first { !it }
                 if (audioPipeline === pipeline) {
                     Log.w(TAG, "Pipeline ended on its own")
-                    AudioServiceState.noteStop("Capture ended")
+                    AudioServiceState.noteStop(StopReason.CaptureEnded)
                     stopCapture()
                 }
             } catch (e: CancellationException) {
@@ -312,11 +312,11 @@ class AudioCaptureService : Service() {
             val channel =
                     NotificationChannel(
                                     CHANNEL_ID,
-                                    "Audio Processing",
+                                    getString(R.string.channel_session),
                                     NotificationManager.IMPORTANCE_LOW
                             )
                             .apply {
-                                description = "Shows when Poise is processing audio"
+                                description = getString(R.string.channel_session_note)
                                 setShowBadge(false)
                             }
 
@@ -369,8 +369,8 @@ class AudioCaptureService : Service() {
         // A draggable slider isn't allowed in notifications, so the bar shows the volume and
         // the buttons change it.
         return NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Isolating voices")
-                .setContentText("Volume $volumePercent%")
+                .setContentTitle(getString(R.string.notification_isolating))
+                .setContentText(getString(R.string.volume_percent, volumePercent))
                 .setProgress(100, volumePercent, false)
                 .setSmallIcon(R.drawable.ic_wave)
                 .setColor(ContextCompat.getColor(this, R.color.poise_cyan))
@@ -378,9 +378,9 @@ class AudioCaptureService : Service() {
                 .setShowWhen(false)
                 .setOnlyAlertOnce(true)
                 .setContentIntent(pendingIntent)
-                .addAction(R.drawable.ic_volume_down, "Volume −", volumeDownIntent)
-                .addAction(R.drawable.ic_volume_up, "Volume +", volumeUpIntent)
-                .addAction(R.drawable.ic_stop, "Stop", stopIntent)
+                .addAction(R.drawable.ic_volume_down, getString(R.string.volume_down), volumeDownIntent)
+                .addAction(R.drawable.ic_volume_up, getString(R.string.volume_up), volumeUpIntent)
+                .addAction(R.drawable.ic_stop, getString(R.string.stop), stopIntent)
                 .setOngoing(true)
                 .build()
     }

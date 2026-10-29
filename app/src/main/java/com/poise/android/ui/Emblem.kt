@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -158,11 +159,12 @@ internal fun Emblem(still: Boolean, shown: Boolean) {
         }
     }
 
+    val description = stringResource(R.string.emblem_description)
     Canvas(
             Modifier.size(210.dp)
                     .graphicsLayer()
                     .semantics {
-                        contentDescription = "Poise emblem"
+                        contentDescription = description
                         onClick { toggle(); true }
                     }
                     .pointerInput(Unit) { detectTapGestures { toggle() } }
