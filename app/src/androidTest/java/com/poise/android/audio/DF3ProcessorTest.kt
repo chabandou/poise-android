@@ -5,8 +5,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.PI
+import kotlin.math.log10
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -14,9 +16,10 @@ import org.junit.runner.RunWith
 class DF3ProcessorTest {
 
     /**
-     * Same input, same output as the desktop's ONNX Runtime: df3_golden.f32 was recorded on the PC
-     * from this input (a 300 Hz tone plus LCG noise), states fed back from the desktop's .npz. Catches
-     * wrong start states and states carried to the wrong inputs.
+     * Same input, nearly the same output as the desktop's ONNX Runtime: df3_golden.f32 was recorded
+     * on the PC from this input (a 300 Hz tone plus LCG noise), states fed back from the desktop's
+     * .npz. The int8 GRUs keep df3.cpp 28 dB from it on the PC; wrong start states or states carried
+     * to the wrong inputs land near 0 dB. Quality on real speech: scripts/native-df3.py quality.
      */
     @Test
     fun modelOutputMatchesDesktop() {
@@ -40,8 +43,13 @@ class DF3ProcessorTest {
                     ByteBuffer.wrap(it.readBytes()).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
                 }
         assertEquals(output.size, golden.remaining())
+        var signal = 0.0
+        var error = 0.0
         for (i in output.indices) {
-            assertEquals("sample $i", golden[i], output[i], 1e-4f)
+            signal += golden[i] * golden[i]
+            error += (output[i] - golden[i]) * (output[i] - golden[i])
         }
+        val snr = 10 * log10(signal / error)
+        assertTrue("output is $snr dB from the desktop's", snr > 20)
     }
 }

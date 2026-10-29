@@ -8,6 +8,9 @@
  * their running norms, the encoder, then two decoders from its embedding. The ERB decoder makes a
  * gain per ERB band for the spectrum two frames back; the DF decoder makes a 5-tap complex filter
  * that replaces its lowest 96 bins. Synthesis turns that spectrum back into audio.
+ *
+ * The five GRUs (7.9 of the model's 8.9 MB) run in int8 (GruI8): weights quantized per row by
+ * the export, input and state per step. Everything else is float, as in the ONNX graph.
  */
 
 #include "df3.h"
@@ -152,9 +155,9 @@ struct Df3 {
   Conv erb_conv0, erb_conv1, erb_conv1p, erb_conv2, erb_conv2p, erb_conv3, erb_conv3p;
   Conv conv0p, conv1p, conv2p, conv3p;                   // ERB decoder's skips from e0..e3
   const float *df_fc_emb, *emb_in, *emb_out;
-  Gru<kH> emb_gru;
+  GruI8<kH> emb_gru;
   const float *erb_in, *df_skip, *df_in, *erb_out, *df_out;
-  Gru<kH> erb_gru[2], df_gru[2];
+  GruI8<kH> erb_gru[2], df_gru[2];
   Conv convt3, convt3p, convt2, convt2p, convt1, convt1p, mask;
   const float *erb_inv, *syn_scale, *ifft_a, *ifft_b;
 

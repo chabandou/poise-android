@@ -6,22 +6,33 @@ Tooling for the hand-written DeepFilterNet3 in app/src/main/cpp/df3.cpp.
                                    and prints which weight is which
     scripts/native-df3.py check    builds df3.cpp for this machine and runs it next to ONNX
                                    Runtime on 2000 frames of synthetic noisy voice
+    scripts/native-df3.py quality CLEAN NOISE...
+                                   what the int8 GRUs cost in quality: clean speech mixed with the
+                                   noises (summed) at several SNRs, denoised by ONNX Runtime (float)
+                                   and by df3.cpp, each scored against the clean speech
 
 models/df3.onnx is the desktop app's DF3 (poise-voice-isolator
 stream_denoiser/models/denoiser_model_df3.onnx, as rewritten by its tools/optimize_df3.py).
 
 The weights file has the same format as gtcrn.weights (see scripts/native-gtcrn.py): every weight
 in the order the graph's nodes first use them, so the C++ reads them in graph order and checks
-each size as it goes.
+each size as it goes. The GRUs' W and R are int8 (see quantize_rows), each followed by its rows'
+scales; df3.cpp runs those GRUs in int8.
 
-The check works like native-gtcrn.py's: one copy of df3.cpp is handed ONNX Runtime's state before
+The check works like native-gtcrn.py's, but with the int8 GRUs only the tensors before them match
+ONNX Runtime within TOLERANCE; the rest show how far int8 moves each one (quality says whether
+that is heard): one copy of df3.cpp is handed ONNX Runtime's state before
 every frame and compared on every tensor df3_tensor() exposes, the other carries its own state
 for all 2000 frames. Only what df3.cpp exposes is compared, so it can be checked as it is
 written, stage by stage; the output counts once df3.cpp exposes "enhanced_audio_frame".
 
-Needs numpy, onnx, onnxruntime and a host C++ compiler (c++).
+quality fails if df3.cpp loses more than MAX_SI_SDR_DROP dB of SI-SDR to ONNX Runtime at any SNR,
+and writes the mixes and both outputs as WAVs to listen to.
+
+Needs numpy, onnx, onnxruntime, soundfile, scipy and a host C++ compiler (c++).
 """
 import ctypes
+import math
 import subprocess
 import sys
 import tempfile
@@ -42,6 +53,10 @@ TOLERANCE = 1e-4
 FRAMES = 2000
 RATE, HOP = 48000, 512
 OUTPUT = "enhanced_audio_frame"
+DELAY = 3 * HOP  # output sample n is input sample n - DELAY
+SNRS = (0, 5, 10)
+#: int8 may score this much lower than float (SI-SDR, dB) at each SNR
+MAX_SI_SDR_DROP = 0.5
 WEIGHT_OPS = {"Mul", "MatMul", "Conv", "FusedConv", "ConvTranspose", "GRU"}
 CONVS = {"Conv", "FusedConv", "ConvTranspose"}
 
@@ -63,14 +78,30 @@ def weights(model):
                 continue
             assert name not in seen, f"{name} is used by two weighted nodes"
             seen.add(name)
-            out.append((i, node.op_type, name, a))
+            if node.op_type == "GRU" and k in (1, 2):  # W, R
+                q, scales = quantize_rows(a)
+                out += [(i, node.op_type, name + " int8", q), (i, node.op_type, name + " scales", scales)]
+            else:
+                out.append((i, node.op_type, name, a))
     return out
 
 
+def quantize_rows(a):
+    """[..., rows, cols] float -> int8 in [-127, 127] and one scale per row, a ≈ q * scale."""
+    rows = a.reshape(-1, a.shape[-1])
+    scales = np.abs(rows).max(axis=1) / 127
+    scales[scales == 0] = 1
+    return np.round(rows / scales[:, None]).astype(np.int8), scales.astype(np.float32)
+
+
 def weights_bytes(entries):
+    """float32 weights as they are; int8 ones as bytes, padded to whole floats."""
     sizes = np.array([a.size for *_, a in entries], "<u4")
-    values = np.concatenate([a.ravel() for *_, a in entries]).astype("<f4")
-    return np.array([len(sizes)], "<u4").tobytes() + sizes.tobytes() + values.tobytes()
+    blocks = []
+    for *_, a in entries:
+        b = a.astype("<f4").tobytes() if a.dtype != np.int8 else a.tobytes()
+        blocks.append(b + bytes(-len(b) % 4))
+    return np.array([len(sizes)], "<u4").tobytes() + sizes.tobytes() + b"".join(blocks)
 
 
 def export():
@@ -79,7 +110,8 @@ def export():
     print(f"{'#':>3} {'node':>4} {'op':<14} {'shape':<18} name")
     for n, (i, op, name, a) in enumerate(entries):
         print(f"{n:>3} {i:>4} {op:<14} {str(list(a.shape)):<18} {name}")
-    print(f"{sum(a.size for *_, a in entries)} floats in {len(entries)} weights -> {WEIGHTS.relative_to(ROOT)}")
+    print(f"{sum(a.size for *_, a in entries)} values in {len(entries)} weights -> {WEIGHTS.relative_to(ROOT)} "
+          f"({WEIGHTS.stat().st_size / 1e6:.2f} MB)")
 
 
 def start_state(session):
@@ -140,6 +172,10 @@ def check():
     # Every intermediate tensor becomes an output, so any of them can be compared
     graph_outputs = {o.name for o in proto.graph.output}
     order = [o for node in proto.graph.node for o in node.output if o]
+    after_gru = set()  # tensors the int8 GRUs feed into: reported, judged by quality instead
+    for node in proto.graph.node:
+        if node.op_type == "GRU" or after_gru.intersection(node.input):
+            after_gru.update(node.output)
     for name in order:
         if name not in graph_outputs:
             proto.graph.output.append(onnx.helper.make_tensor_value_info(name, onnx.TensorProto.FLOAT, None))
@@ -160,7 +196,8 @@ def check():
     owned = [s for s in states if so.df3_tensor(forced, s.encode())]
     kept = [n for n in order if n not in states.values() and so.df3_tensor(forced, n.encode())]
     worst = {}   # tensor -> (error, frame), forced copy
-    drift = []   # per frame, free-running copy: worst error over the output and its state
+    drift = []   # per frame, free-running copy: worst error over the state the GRUs don't feed
+    output_drift = []
     seconds = 0.0
 
     # Its own state must start where ONNX Runtime's does
@@ -187,8 +224,10 @@ def check():
                 e = error(v, ref[name].ravel())
                 if e > worst.get(name, (-1, 0))[0]:
                     worst[name] = (e, f)
-            drift.append(max([error(free_out, ref[OUTPUT].ravel())] * (OUTPUT in kept) +
-                             [error(view(so, free, s, state[s].size), ref[states[s]].ravel()) for s in owned]))
+            drift.append(max([error(view(so, free, s, state[s].size), ref[states[s]].ravel())
+                              for s in owned if states[s] not in after_gru]))
+            if OUTPUT in kept:
+                output_drift.append(error(free_out, ref[OUTPUT].ravel()))
             state = {s: ref[o] for s, o in states.items()}
     finally:
         so.df3_destroy(forced)
@@ -197,19 +236,104 @@ def check():
     position = {name: i for i, name in enumerate(order)}
     print(f"{'tensor':<48} {'shape':<16} {'worst error':>11} {'at frame':>8}")
     for name, (e, f) in sorted(worst.items(), key=lambda kv: position.get(kv[0], -1)):
-        mark = "  FAIL" if e > TOLERANCE else ""
+        mark = "  (int8)" if name in after_gru else "  FAIL" if e > TOLERANCE else ""
         print(f"{name:<48} {str(list(ref[name].shape)):<16} {e:>11.2e} {f:>8}{mark}")
     quarter = FRAMES // 4
     print(f"own state for {FRAMES} frames: worst error {max(drift):.2e} "
-          f"(first quarter {max(drift[:quarter]):.2e}, last {max(drift[-quarter:]):.2e})")
+          f"(first quarter {max(drift[:quarter]):.2e}, last {max(drift[-quarter:]):.2e})"
+          + (f"; output (int8) {max(output_drift):.2e}" if output_drift else ""))
     missing = [s for s in states if s not in owned]
     print(f"df3.cpp: {1e3 * seconds / FRAMES:.3f} ms per frame on this machine; "
           f"output {'compared' if OUTPUT in kept else 'not written yet'}"
           + (f"; state not handled yet: {', '.join(missing)}" if missing else ""))
-    failed = max(e for e, _ in worst.values()) > TOLERANCE or max(drift) > TOLERANCE
+    failed = max(e for n, (e, _) in worst.items() if n not in after_gru) > TOLERANCE or max(drift) > TOLERANCE
+    print("FAIL" if failed else "OK")
+    sys.exit(1 if failed else 0)
+
+
+def load_audio(path):
+    """Mono float32 at RATE."""
+    import soundfile
+    from scipy.signal import resample_poly
+
+    x, rate = soundfile.read(path, dtype="float32", always_2d=True)
+    x = x.mean(axis=1)
+    g = math.gcd(RATE, rate)
+    return resample_poly(x, RATE // g, rate // g).astype(np.float32) if rate != RATE else x
+
+
+def si_sdr(estimate, reference):
+    """Scale-invariant signal to distortion ratio, dB."""
+    a = np.dot(estimate, reference) / np.dot(reference, reference)
+    target = a * reference
+    return float(10 * np.log10(np.sum(target ** 2) / np.sum((estimate - target) ** 2)))
+
+
+def denoise(run, x):
+    out = np.zeros_like(x)
+    for f in range(len(x) // HOP):
+        out[f * HOP:(f + 1) * HOP] = run(np.ascontiguousarray(x[f * HOP:(f + 1) * HOP]))
+    return out
+
+
+def quality():
+    import soundfile
+
+    if len(sys.argv) < 4:
+        sys.exit(__doc__)
+    clean = load_audio(sys.argv[2])
+    clean = clean[:len(clean) // HOP * HOP]
+    noise = np.zeros_like(clean)
+    for path in sys.argv[3:]:
+        n = load_audio(path)
+        noise += np.resize(n, clean.size)  # repeated if shorter
+    blob = WEIGHTS.read_bytes()
+    so = build()
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 1
+    session = ort.InferenceSession(str(MODEL), options, providers=["CPUExecutionProvider"])
+    out_dir = Path(tempfile.mkdtemp(prefix="df3-quality-"))
+
+    print(f"{len(clean) / RATE:.0f} s of speech; SI-SDR in dB against it, after the model's {DELAY}-sample delay")
+    print(f"{'SNR':>4} {'noisy':>7} {'float':>7} {'int8':>7} {'drop':>6} {'int8 vs float':>14}")
+    failed = False
+    for snr in SNRS:
+        x = clean + noise * np.sqrt(np.sum(clean ** 2) / np.sum(noise ** 2) / 10 ** (snr / 10))
+        x = (x * 0.5 / np.abs(x).max()).astype(np.float32)  # the same headroom at every SNR
+
+        state = start_state(session)
+        names = [o.name for o in session.get_outputs()]
+
+        def ort_frame(frame):
+            nonlocal state
+            out = dict(zip(names, session.run(names, {"input_frame": frame, **state})))
+            state = {s: out["new_" + s] for s in state}
+            return out[OUTPUT]
+
+        model = so.df3_create(blob, len(blob))
+        native_out = np.zeros(HOP, np.float32)
+
+        def native_frame(frame):
+            so.df3_run(model, frame.ctypes.data, native_out.ctypes.data)
+            return native_out
+
+        try:
+            ref, q = denoise(ort_frame, x), denoise(native_frame, x)
+        finally:
+            so.df3_destroy(model)
+        target = clean[:-DELAY]
+        scores = [si_sdr(x[:-DELAY], target), si_sdr(ref[DELAY:], target), si_sdr(q[DELAY:], target)]
+        drop = scores[1] - scores[2]
+        match = 10 * np.log10(np.sum(ref ** 2) / np.sum((q - ref) ** 2))
+        failed |= drop > MAX_SI_SDR_DROP
+        print(f"{snr:>4} {scores[0]:>7.2f} {scores[1]:>7.2f} {scores[2]:>7.2f} {drop:>6.2f} {match:>11.1f} dB"
+              + ("  FAIL" if drop > MAX_SI_SDR_DROP else ""))
+        for name, audio in (("noisy", x), ("float", ref), ("int8", q)):
+            soundfile.write(out_dir / f"snr{snr}_{name}.wav", audio, RATE)
+    print(f"WAVs in {out_dir}")
     print("FAIL" if failed else "OK")
     sys.exit(1 if failed else 0)
 
 
 if __name__ == "__main__":
-    {"export": export, "check": check}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: sys.exit(__doc__))()
+    {"export": export, "check": check, "quality": quality}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: sys.exit(__doc__))()
