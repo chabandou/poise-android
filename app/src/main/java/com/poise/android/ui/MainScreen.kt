@@ -50,8 +50,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -81,11 +83,14 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -554,18 +559,21 @@ private fun TextScaleUpTo(max: Float, content: @Composable () -> Unit) {
  */
 @Composable
 private fun RollDigits(text: String, style: TextStyle, up: Boolean) {
-    Row {
-        text.forEachIndexed { i, c ->
-            key(text.length - i) {
-                AnimatedContent(
-                        c,
-                        transitionSpec = {
-                            (slideInVertically(spring(dampingRatio = 0.6f, stiffness = 700f)) { h -> if (up) h else -h } + fadeIn(tween(150))) togetherWith
-                                    (slideOutVertically(tween(180)) { h -> if (up) -h else h } + fadeOut(tween(120))) using
-                                    SizeTransform(clip = true)
-                        },
-                        label = "digit"
-                ) { Text(it.toString(), style = style) }
+    // One character per cell, so "-60 dB" is laid out left to right in any layout
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row {
+            text.forEachIndexed { i, c ->
+                key(text.length - i) {
+                    AnimatedContent(
+                            c,
+                            transitionSpec = {
+                                (slideInVertically(spring(dampingRatio = 0.6f, stiffness = 700f)) { h -> if (up) h else -h } + fadeIn(tween(150))) togetherWith
+                                        (slideOutVertically(tween(180)) { h -> if (up) -h else h } + fadeOut(tween(120))) using
+                                        SizeTransform(clip = true)
+                            },
+                            label = "digit"
+                    ) { Text(it.toString(), style = style) }
+                }
             }
         }
     }
@@ -731,7 +739,8 @@ private fun StatCell(label: String, value: String?, color: Color, modifier: Modi
     val shown by animateColorAsState(if (value == null) pal.tick else color, tween(300), label = "stat")
     Column(modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.Center) {
         Text(label.uppercase(), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.2.em)
-        val style = TextStyle(color = shown, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 22.sp)
+        val style = TextStyle(color = shown, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 22.sp,
+                textDirection = TextDirection.Content) // "10.7 ms" keeps its order right to left
         if (roll || value == null) {
             RollText(value ?: "—", style, alignment = Alignment.CenterStart)
         } else {
@@ -897,6 +906,8 @@ private fun SliderCard(
         Canvas(
                 Modifier.fillMaxWidth()
                         .height(40.dp)
+                        // Right to left, the ruler runs from the right; touches are flipped with it
+                        .scale(if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f, 1f)
                         .semantics {
                             contentDescription = title
                             progressBarRangeInfo = ProgressBarRangeInfo(position, range)
@@ -940,9 +951,11 @@ private fun SliderCard(
             drawRoundRect(pal.secondary, Offset(thumbX - w / 2, cy - h / 2), Size(w, h), CornerRadius(w / 2))
         }
         Row {
-            Text(ends.first, color = pal.muted, fontSize = 12.sp)
+            // By content: "-70 dB" stays in that order in a right-to-left layout
+            val end = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
+            Text(ends.first, color = pal.muted, fontSize = 12.sp, style = end)
             Spacer(Modifier.weight(1f))
-            Text(ends.second, color = pal.muted, fontSize = 12.sp)
+            Text(ends.second, color = pal.muted, fontSize = 12.sp, style = end)
         }
     }
 }
@@ -1115,10 +1128,11 @@ private fun ColumnScope.SettingsPage(
                     val w = 2.dp.toPx()
                     val r = 8.dp.toPx() * k
                     val ring = Size(slot.width * k - w, slot.height * k - w)
+                    val x = ringAt.value.x * (slot.width + gap) + (slot.width - ring.width) / 2
                     drawRoundRect(
                             pal.secondary,
                             Offset(
-                                    ringAt.value.x * (slot.width + gap) + (slot.width - ring.width) / 2,
+                                    if (layoutDirection == LayoutDirection.Rtl) size.width - x - ring.width else x,
                                     ringAt.value.y * (slot.height + gap) + (slot.height - ring.height) / 2
                             ),
                             ring,
@@ -1318,9 +1332,10 @@ private fun NavBar(page: Page, position: () -> Float, dip: () -> Float, onSelect
                             val n = Page.values().size
                             val slot = (size.width - 2 * pad - (n - 1) * gap) / n
                             val h = size.height * (1f - 0.4f * dip())
+                            val x = pad + position() * (slot + gap)
                             drawRect(
                                     Brush.verticalGradient(listOf(Color.Transparent, pal.accentWash), startY = size.height - h, endY = size.height),
-                                    Offset(pad + position() * (slot + gap), size.height - h),
+                                    Offset(if (layoutDirection == LayoutDirection.Rtl) size.width - x - slot else x, size.height - h),
                                     Size(slot, h)
                             )
                         }

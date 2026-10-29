@@ -109,7 +109,9 @@ internal fun CardPicker(options: List<String>, selected: Int, onPick: (Int) -> U
                 with(density) {
                     val room = ROOM.roundToPx()
                     val gap = GAP.roundToPx()
-                    val x = anchorBounds.right - INSET.roundToPx() - popupContentSize.width + room
+                    // Over the row's value, which sits at its end
+                    val x = if (layoutDirection == LayoutDirection.Rtl) anchorBounds.left + INSET.roundToPx() - room
+                            else anchorBounds.right - INSET.roundToPx() - popupContentSize.width + room
                     val below = anchorBounds.bottom + gap - room
                     above = below + popupContentSize.height > windowSize.height
                     return IntOffset(x, if (above) anchorBounds.top - gap - popupContentSize.height + room else below)
