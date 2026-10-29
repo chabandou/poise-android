@@ -1,0 +1,3 @@
+# Precompile all of Poise's own code; Compose ships its own rules
+HSPLcom/poise/android/**->**(**)**
+Lcom/poise/android/**;
