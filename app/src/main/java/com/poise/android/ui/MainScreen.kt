@@ -40,6 +40,10 @@ import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -81,6 +85,7 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -741,8 +746,10 @@ private fun StageTitle(motion: HomeMotion) {
 private fun StatCell(label: String, value: String?, color: Color, modifier: Modifier, roll: Boolean = false, unit: String? = null) {
     val pal = LocalPalette.current
     val shown by animateColorAsState(if (value == null) pal.tick else color, tween(300), label = "stat")
-    Column(modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.Center) {
-        Text(label.uppercase(Locale.getDefault()), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.2.em)
+    // Less room at the end than the start: a cell is a third of the row, and translations run long
+    Column(modifier.padding(start = 18.dp, end = 10.dp), verticalArrangement = Arrangement.Center) {
+        Text(label.uppercase(Locale.getDefault()), color = pal.muted, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.2.em,
+                maxLines = 1, overflow = TextOverflow.Ellipsis) // a wrapped label would push the value out of the cell
         val style = TextStyle(color = shown, fontFamily = Rajdhani, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 22.sp,
                 textDirection = TextDirection.Content) // "10.7 ms" keeps its order right to left
         if (roll || value == null) {
@@ -1259,35 +1266,49 @@ private fun ThemeTile(name: String, panel: Color, accent: Color, on: Boolean, mo
 
 private const val GITHUB =
         "M9 19c-4 1.3-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6.2 0C6.6 2.8 5.6 3.1 5.6 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.2 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"
+private val EMBLEM_MIN = 120.dp
+private val EMBLEM_MAX = 210.dp
 private const val WARNING = "M12 3l9.5 16.5h-19z M12 10v4M12 17v.01"
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun ColumnScope.AboutPage(versionName: String, onOpenUrl: (String) -> Unit, still: Boolean, shown: Boolean) {
     val pal = LocalPalette.current
-
-    Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-    ) {
-        Emblem(still, shown)
-        Spacer(Modifier.height(10.dp))
-        Title("Poise Voice Isolator", size = 30)
-        Text("v$versionName", color = pal.secondary, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-        Spacer(Modifier.height(4.dp))
-        Text(stringResource(R.string.about_tagline), color = pal.ink, fontSize = 14.sp, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(10.dp))
-        Text(
-                stringResource(R.string.about_credits),
-                color = pal.muted,
-                fontSize = 13.sp,
-                lineHeight = 22.sp,
-                textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            LinkButton("GitHub", GITHUB) { onOpenUrl(GITHUB_URL) }
-            LinkButton(stringResource(R.string.report_issue), WARNING) { onOpenUrl("$GITHUB_URL/issues") }
+    val density = LocalDensity.current
+    var below by remember { mutableStateOf(0.dp) } // everything under the emblem
+    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        // The emblem gives up height first, down to EMBLEM_MIN; past that the page scrolls
+        val emblem = (maxHeight - below).coerceIn(EMBLEM_MIN, EMBLEM_MAX)
+        Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+        ) {
+            Emblem(still, shown, Modifier.size(emblem))
+            Column(
+                    Modifier.onSizeChanged { below = with(density) { it.height.toDp() } },
+                    horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(Modifier.height(10.dp))
+                Title("Poise Voice Isolator", size = 30)
+                Text("v$versionName", color = pal.secondary, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                Spacer(Modifier.height(4.dp))
+                Text(stringResource(R.string.about_tagline), color = pal.ink, fontSize = 14.sp, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                        stringResource(R.string.about_credits),
+                        color = pal.muted,
+                        fontSize = 13.sp,
+                        lineHeight = 22.sp,
+                        textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(14.dp))
+                // A translation too long for one line puts the second button under the first
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LinkButton("GitHub", GITHUB) { onOpenUrl(GITHUB_URL) }
+                    LinkButton(stringResource(R.string.report_issue), WARNING) { onOpenUrl("$GITHUB_URL/issues") }
+                }
+            }
         }
     }
 }
@@ -1306,7 +1327,7 @@ private fun LinkButton(text: String, icon: String, onClick: () -> Unit) {
     ) {
         PathIcon(icon, 24f, 16.dp, pal.secondary, stroke = 1.8f)
         Spacer(Modifier.width(8.dp))
-        Text(text, color = pal.ink, fontSize = 14.sp)
+        Text(text, color = pal.ink, fontSize = 14.sp, maxLines = 1)
     }
 }
 

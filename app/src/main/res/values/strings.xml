@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Poise</string>
+    <string name="app_name" translatable="false">Poise</string>
 
     <!-- Tabs -->
     <string name="tab_home">Home</string>
@@ -106,7 +106,7 @@
     <string name="reset_confirm">Confirm</string>
 
     <!-- About -->
-    <string name="about_tagline">Voice isolation, 100% on-device</string>
+    <string name="about_tagline" formatted="false">Voice isolation, 100% on-device</string>
     <string name="about_credits">Denoising: GTCRN (Rong et al., 2024)\nBuilt with Kotlin and C++</string>
     <string name="report_issue">Report an issue</string>
     <string name="emblem_description">Poise emblem</string>

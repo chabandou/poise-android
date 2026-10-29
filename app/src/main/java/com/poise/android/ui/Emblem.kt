@@ -5,7 +5,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -113,7 +112,7 @@ private fun lock(ms: Float) = if (ms < 0f) 0f else 10f * exp(-ms / 110f) * sin(2
  * emblem again.
  */
 @Composable
-internal fun Emblem(still: Boolean, shown: Boolean) {
+internal fun Emblem(still: Boolean, shown: Boolean, modifier: Modifier = Modifier) {
     val pal = LocalPalette.current
     val buzz = rememberBuzz()
     val scope = rememberCoroutineScope()
@@ -161,7 +160,7 @@ internal fun Emblem(still: Boolean, shown: Boolean) {
 
     val description = stringResource(R.string.emblem_description)
     Canvas(
-            Modifier.size(210.dp)
+            modifier
                     .graphicsLayer()
                     .semantics {
                         contentDescription = description
