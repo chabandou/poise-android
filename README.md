@@ -94,16 +94,11 @@ Pick one in **Settings → Model**. It applies from the next start.
 
 ## How it works
 
-```
- other apps ──► capture ──► denoise ──► mix ──► upsample ──► 48 kHz track ──► headphones
-   (muted)     playback     DF3 or      input     3× for       fast mixer
-               capture      GTCRN       under     GTCRN        path
-               model rate   native C++  the voice
-```
+<img src=".github/media/processing-flow.png" alt="Poise for Android processing flow: capture, mute, isolate (DeepFilterNet3 or GTCRN), mix (−6 to −60 dB), play. 48 kHz output, 10.7 ms frames, about 95 ms to your ears." width="100%"/>
 
 1. **Capture.** `AudioPlaybackCapture` records other apps' media, game and unlabeled audio as mono float, at the model's own rate: Android resamples, with proper filtering.
 2. **Mute the original.** The media stream gets a *stream mute*, not volume 0, so Bluetooth headphones with absolute volume keep their own level. Volume keys step Poise's volume instead; Android unmutes on volume up, and Poise mutes again within ~30 ms.
-3. **Denoise.** The model runs on its own thread at `URGENT_AUDIO` priority, pinned off the phone's slowest CPU cluster.
+3. **Isolate.** The model runs on its own thread at `URGENT_AUDIO` priority, pinned off the phone's slowest CPU cluster.
 4. **Mix.** **Reduction strength** sets how far the input stays under the voice, from −6 dB (gentle) to −60 dB (strong).
 5. **Play.** A low-latency `AudioTrack` on the *accessibility* usage: it plays at the media volume, but the media mute doesn't silence it. Only a 48 kHz track gets the fast mixer, so GTCRN's 16 kHz output goes through a 96-tap polyphase upsampler. The track's cushion starts at two frames and grows by one per underrun.
 
@@ -264,7 +259,7 @@ scripts/                         # dev.sh, native-df3.py, native-gtcrn.py
 |:--|:--|
 | [DeepFilterNet3](https://github.com/Rikorose/DeepFilterNet) | Hendrik Schröter (Rikorose) |
 | [GTCRN](https://github.com/Xiaobin-Rong/gtcrn) | Xiaobin Rong (MIT; official streaming export) |
-| [Poise Voice Isolator](https://github.com/chabandou/poise-voice-isolator) | The optimized model graphs both ports start from |
+
 
 ## Contributing
 

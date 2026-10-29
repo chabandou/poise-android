@@ -1,0 +1,132 @@
+<!doctype html>
+<!--
+  The README's "How it works" illustration. Render at 2x into .github/media/processing-flow.png:
+    H=$(chromium --headless=new --virtual-time-budget=5000 --window-size=900,800 --dump-dom scripts/processing-flow.html | sed -n 's:.*<title>\([0-9]*\)</title>.*:\1:p')
+    chromium --headless=new --hide-scrollbars --virtual-time-budget=5000 --force-device-scale-factor=2 \
+      --window-size=900,$H --screenshot=out.png scripts/processing-flow.html
+  Colors are the app's Halcyon palette (ui/theme/Color.kt); the lattice is Dial.kt's tile.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #0a111e; --deep: #080e18; --panel: #0f1828; --panel2: #111c30; --line: #1d2a3b; --tick: #34475f;
+    --ink: #f8fafc; --muted: #8b94a3; --accent: #5fd5eb; --gold: #e8c468;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 900px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+  .lattice { position: absolute; inset: 0; }
+  main { position: relative; padding: 56px 64px 60px; }
+
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand span { font: 600 15px Rajdhani; letter-spacing: .38em; color: var(--accent); }
+  h1 { font: 700 60px/1 Rajdhani; margin: 22px 0 12px; letter-spacing: -.005em; }
+  .sub { color: var(--muted); font-size: 18px; margin: 0; }
+
+
+  .steps { position: relative; display: grid; gap: 18px; margin-top: 44px; }
+  .rail { position: absolute; left: 43px; top: 40px; bottom: 40px; width: 2px;
+          background: linear-gradient(var(--tick), var(--accent) 50%, var(--tick)); opacity: .55; }
+  .card { position: relative; display: flex; align-items: center; gap: 22px; min-height: 94px; padding: 0 26px;
+          background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 14px; }
+  .card.lit { border-color: rgba(95, 213, 235, .55); box-shadow: 0 0 0 1px rgba(95, 213, 235, .08), 0 0 38px rgba(95, 213, 235, .16); }
+  .icon { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--deep); border: 1px solid var(--line); }
+  .icon svg { width: 20px; height: 20px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .text { flex: 1; }
+  .text b { display: block; font: 600 25px/1.1 Rajdhani; }
+  .text p { margin: 6px 0 0; color: var(--muted); font-size: 15px; line-height: 1.4; }
+  .pills { display: flex; gap: 4px; padding: 4px; border-radius: 99px; background: var(--deep); }
+  .pill { font-size: 13px; padding: 6px 13px; border-radius: 99px; color: var(--muted); white-space: nowrap; }
+  .pill.on { background: rgba(95, 213, 235, .14); color: var(--accent); }
+  .pill.gold { background: rgba(232, 196, 104, .12); color: var(--gold); }
+  .num { font: 600 15px Rajdhani; letter-spacing: .2em; color: var(--gold); width: 30px; text-align: right; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 30px; padding: 26px 0 22px;
+           background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; }
+  .stat { text-align: center; border-left: 1px solid var(--line); }
+  .stat:first-child { border-left: 0; }
+  .stat .v { font: 600 46px/1 Rajdhani; }
+  .stat .v small { font-size: 22px; color: var(--accent); margin-left: 4px; }
+  .stat .k { margin-top: 12px; font: 500 12px Inter; letter-spacing: .2em; color: var(--muted); }
+</style>
+</head>
+<body>
+<svg class="lattice" width="900" height="100%">
+  <defs>
+    <!-- Dial.kt's TILE at 0.85 of 64 -->
+    <pattern id="tile" width="54.4" height="54.4" patternUnits="userSpaceOnUse" patternTransform="translate(-12 -5)">
+      <g transform="scale(.85)" fill="none" stroke="#5fd5eb" stroke-width="1.18">
+        <path d="M21 21H43V43H21Z M32 16.44L47.56 32L32 47.56L16.44 32Z M32 0V16.4M32 47.6V64M0 32H16.4M47.6 32H64M0 0L21 21M64 0L43 21M0 64L21 43M64 64L43 43"/>
+        <circle cx="32" cy="32" r="2.5" fill="#5fd5eb" stroke="none"/>
+      </g>
+    </pattern>
+    <!-- Clear in the middle, like Home's card: the lattice frames the content -->
+    <radialGradient id="fade" cx="50%" cy="46%" r="72%" gradientTransform="translate(.5 .46) scale(1 .62) translate(-.5 -.46)">
+      <stop offset="0" stop-color="#fff" stop-opacity=".02"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".05"/>
+      <stop offset="1" stop-color="#fff" stop-opacity=".16"/>
+    </radialGradient>
+    <mask id="m"><rect width="900" height="100%" fill="url(#fade)"/></mask>
+  </defs>
+  <rect width="900" height="100%" fill="url(#tile)" mask="url(#m)"/>
+</svg>
+
+<main>
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#5fd5eb" stroke-width="1.9" stroke-linecap="round">
+      <path d="M3 12C3 8.1 4.3 3 6.9 3C10.7 3 13.3 21 17.1 21C19.7 21 21 15.9 21 12M3 12H5M19 12H21M15.5 12H16.5M7.5 12H8.5"/>
+    </svg>
+    <span>POISE FOR ANDROID</span>
+  </div>
+  <h1>The processing flow</h1>
+  <p class="sub">Five steps, one frame every 10.7 ms, all on the phone.</p>
+
+  <div class="steps">
+    <div class="rail"></div>
+    <div class="card">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></div>
+      <div class="text"><b>Capture</b><p>Playback capture takes what other apps play.</p></div>
+      <div class="pills"><span class="pill">media · games</span></div>
+      <div class="num">01</div>
+    </div>
+    <div class="card">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6"/></svg></div>
+      <div class="text"><b>Mute</b><p>The original goes quiet; volume keys move Poise.</p></div>
+      <div class="pills"><span class="pill gold">stream mute</span></div>
+      <div class="num">02</div>
+    </div>
+    <div class="card lit">
+      <div class="icon"><svg viewBox="0 0 24 24" style="stroke-width:1.9"><path d="M3 12C3 8.1 4.3 3 6.9 3C10.7 3 13.3 21 17.1 21C19.7 21 21 15.9 21 12M3 12H5M19 12H21M15.5 12H16.5M7.5 12H8.5"/></svg></div>
+      <div class="text"><b>Isolate</b><p>Native C++ keeps the voice and drops the rest.</p></div>
+      <div class="pills"><span class="pill on">DeepFilterNet3</span><span class="pill">GTCRN</span></div>
+      <div class="num">03</div>
+    </div>
+    <div class="card">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg></div>
+      <div class="text"><b>Mix</b><p>A trace of the input stays under the voice.</p></div>
+      <div class="pills"><span class="pill on">−6 to −60 dB</span></div>
+      <div class="num">04</div>
+    </div>
+    <div class="card">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M3 14h4v6H5a2 2 0 0 1-2-2zM21 14h-4v6h2a2 2 0 0 0 2-2z"/></svg></div>
+      <div class="text"><b>Play</b><p>A 48 kHz low-latency track, straight to your ears.</p></div>
+      <div class="pills"><span class="pill">fast path</span></div>
+      <div class="num">05</div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="v">48<small>kHz</small></div><div class="k">OUTPUT</div></div>
+    <div class="stat"><div class="v">10.7<small>ms</small></div><div class="k">PER FRAME</div></div>
+    <div class="stat"><div class="v">~95<small>ms</small></div><div class="k">TO YOUR EARS</div></div>
+  </div>
+</main>
+
+<script>
+  // The page's height, for the render's window size
+  document.title = Math.ceil(document.querySelector('main').getBoundingClientRect().height)
+</script>
+</body>
+</html>
