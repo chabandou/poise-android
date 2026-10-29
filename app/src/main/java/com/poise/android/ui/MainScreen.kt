@@ -550,8 +550,8 @@ private fun modelLabel(model: PoiseSettings.Model) = when (model) {
 }
 
 private fun modelNote(model: PoiseSettings.Model) = when (model) {
-    PoiseSettings.Model.GTCRN -> "Light, runs on any phone"
-    PoiseSettings.Model.DF3 -> "Fuller sound, needs a fast phone"
+    PoiseSettings.Model.GTCRN -> "Lighter, for older phones"
+    PoiseSettings.Model.DF3 -> "Fuller, more natural sound"
 }
 
 private fun autoStopLabel(minutes: Int) = when {
