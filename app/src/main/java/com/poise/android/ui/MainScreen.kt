@@ -244,7 +244,7 @@ fun MainScreen(
 
     Column(Modifier.fillMaxSize().background(pal.bg)) {
         Column(Modifier.weight(1f).fillMaxWidth().statusBarsPadding()) {
-            Box(Modifier.padding(horizontal = 18.dp)) { Header(still) }
+            Box(Modifier.padding(horizontal = 18.dp)) { Header() }
             Spacer(Modifier.height(16.dp))
             HorizontalPager(
                     pager,
@@ -345,22 +345,13 @@ internal fun drawOn(width: Float, progress: Float) = Stroke(
         pathEffect = if (progress >= 1f) null else PathEffect.dashPathEffect(floatArrayOf(44f * progress + 0.01f, 1000f))
 )
 
-/** Plays [to] once when first shown, unless motion is reduced. */
 @Composable
-private fun rememberIntro(still: Boolean, durationMs: Int, delayMs: Int = 0): Float {
-    val a = remember { Animatable(if (still) 1f else 0f) }
-    LaunchedEffect(Unit) { a.animateTo(1f, tween(durationMs, delayMs, FastOutSlowInEasing)) }
-    return a.value
-}
-
-@Composable
-private fun Header(still: Boolean) {
+private fun Header() {
     val pal = LocalPalette.current
-    val draw = rememberIntro(still, 900, 150)
     Row(Modifier.height(48.dp), verticalAlignment = Alignment.CenterVertically) {
         Canvas(Modifier.size(28.dp)) {
             val s = size.width / 24f
-            scale(s, s, pivot = Offset.Zero) { drawPath(WAVE_PATH, pal.accent, style = drawOn(1.9f, draw)) }
+            scale(s, s, pivot = Offset.Zero) { drawPath(WAVE_PATH, pal.accent, style = drawOn(1.9f, 1f)) }
         }
         Spacer(Modifier.width(10.dp))
         Text("Poise", color = pal.ink, fontFamily = Rajdhani, fontWeight = FontWeight.Bold, fontSize = 26.sp)
