@@ -13,7 +13,7 @@ import java.io.File
  * - State caching for real-time streaming
  * - Expected RTF < 1.0 on mobile devices
  */
-class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f) : AutoCloseable {
+class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f) : Denoiser {
 
     companion object {
         private const val TAG = "GTCRNProcessor"
@@ -47,16 +47,21 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
 
     // VAD
     private var vadThresholdLinear = Math.pow(10.0, vadThresholdDb / 20.0).toFloat()
+    override val sampleRate = SAMPLE_RATE
+    override val frameSize = FRAME_SIZE
+    // The iSTFT's overlap-add: one hop
+    override val delaySamples = FRAME_SIZE
+
     /** Frames quieter than this skip the model. */
-    var silenceThresholdDb = vadThresholdDb
+    override var silenceThresholdDb = vadThresholdDb
         set(value) {
             field = value
             vadThresholdLinear = Math.pow(10.0, value / 20.0).toFloat()
         }
     /** Share of the input's spectrum mixed back under the model's output (0 = none). */
-    var residualGain = 0f
+    override var residualGain = 0f
     /** Quiet frames in a row, since the last frame above [silenceThresholdDb]. */
-    var framesSinceActive = 0
+    override var framesSinceActive = 0
         private set
     private val hangFrames = ((300.0 * SAMPLE_RATE / 1000) / FRAME_SIZE).toInt() // 300ms hang time
 
@@ -97,7 +102,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
      * @param inputFrame Audio samples (FRAME_SIZE = 256 samples at 16kHz)
      * @return Enhanced audio samples (256 samples)
      */
-    fun processFrame(inputFrame: FloatArray): FloatArray? {
+    override fun processFrame(inputFrame: FloatArray): FloatArray? {
         if (modelHandle == 0L || stftHandle == 0L) {
             Log.e(TAG, "Processor not initialized")
             return inputFrame
@@ -181,7 +186,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
     }
 
     /** Get processing statistics. */
-    fun getStats(): ProcessingStats {
+    override fun getStats(): ProcessingStats {
         val rtf =
                 if (smoothedInferenceTimeMs > 0) {
                     val frameDurationMs = (FRAME_SIZE.toFloat() / SAMPLE_RATE) * 1000
@@ -218,8 +223,7 @@ class GTCRNProcessor(context: Context, private val vadThresholdDb: Float = -40f)
         Log.i(TAG, "GTCRNProcessor closed")
     }
 
-    /** Keeps the calling thread off the slowest cores; how many it may use, 0 if none are slower, or -errno. */
-    external fun pinToFastCores(): Int
+    external override fun pinToFastCores(): Int
 
     // Native methods
     private external fun nativeSTFTInit(): Long

@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Audio pipeline that orchestrates:
  * 1. Capturing system audio via AudioPlaybackCapture
- * 2. Denoising through GTCRN
+ * 2. Denoising through the model picked in Settings (GTCRN or DF3)
  * 3. Playing back enhanced audio via AudioTrack
  */
 class AudioPipeline(private val context: Context) {
@@ -30,30 +30,28 @@ class AudioPipeline(private val context: Context) {
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_FLOAT
 
-        // GTCRN runs at 16kHz; Android resamples capture for us (with proper filtering)
-        private const val SAMPLE_RATE = GTCRNProcessor.SAMPLE_RATE
-        private const val FRAME_SIZE = GTCRNProcessor.FRAME_SIZE // 16ms at 16kHz
-        // The track plays at 48 kHz, upsampled by us: only a track at the output's own rate gets
-        // Android's fast path (on the realme C67 it skips ~76 ms of mixing; 40 ms less delay). Its
-        // frames are UP times ours; the pipeline counts in ours
-        private const val UP = Upsampler.FACTOR
-        private const val OUT_RATE = SAMPLE_RATE * UP
-
-        // Room for 160 ms of float samples in capture and output. Only the audio actually waiting in
-        // them is delay, so the room costs nothing until a slow stretch needs it
-        private const val MIN_BUFFER_BYTES = SAMPLE_RATE * 160 / 1000 * Float.SIZE_BYTES
-
-        private const val HEALTH_LOG_FRAMES = SAMPLE_RATE * 5 / FRAME_SIZE // every ~5 s
-        private const val WARMUP_FRAMES = SAMPLE_RATE // the first second of output, while capture starts
+        // The track plays at 48 kHz: only a track at the output's own rate gets Android's fast path
+        // (on the realme C67 it skips ~76 ms of mixing; 40 ms less delay). A model at a lower rate
+        // is upsampled by us
+        private const val OUT_RATE = 48000
 
         // How long a frame's work should take, for the CPU governor's performance hint: well inside
-        // the 16 ms frame, so slow stretches still have room
+        // the frame (10.7 ms for DF3, 16 for GTCRN), so slow stretches still have room
         private const val HINT_TARGET_NS = 4_000_000L
     }
 
     private var audioRecord: AudioRecord? = null
     private var audioTrack: AudioTrack? = null
-    private var gtcrnProcessor: GTCRNProcessor? = null
+    private var denoiser: Denoiser? = null
+    // The running model's: capture runs at its rate (Android resamples for us, with proper
+    // filtering), one read is one of its frames, and the track's frames are up times ours. The
+    // pipeline counts in the model's frames
+    private var rate = GTCRNProcessor.SAMPLE_RATE
+    private var frame = GTCRNProcessor.FRAME_SIZE
+    private var up = OUT_RATE / rate
+    // Room for 160 ms of float samples in capture and output. Only the audio actually waiting in
+    // them is delay, so the room costs nothing until a slow stretch needs it
+    private val minBufferBytes get() = rate * 160 / 1000 * Float.SIZE_BYTES
     private var processingJob: Job? = null
     private var mediaProjection: MediaProjection? = null
 
@@ -90,7 +88,7 @@ class AudioPipeline(private val context: Context) {
 
         mediaProjection = projection
 
-        // Each frame must be done within 16 ms, so the loop gets its own thread at audio priority
+        // Each frame must be done within its length, so the loop gets its own thread at audio priority
         // instead of sharing the IO pool at normal priority.
         val audioThread =
                 Executors.newSingleThreadExecutor { task ->
@@ -107,7 +105,14 @@ class AudioPipeline(private val context: Context) {
         processingJob =
                 CoroutineScope(audioThread).launch {
                     try {
-                        gtcrnProcessor = GTCRNProcessor(context)
+                        val model = PoiseSettings.model.value
+                        val d = Denoiser.create(context, model)
+                        denoiser = d
+                        rate = d.sampleRate
+                        frame = d.frameSize
+                        up = OUT_RATE / rate
+                        check(up == 1 || up == Upsampler.FACTOR) { "No upsampler from $rate Hz" }
+                        Log.i(TAG, "Model $model: $rate Hz, ${frame * 1000f / rate} ms frames")
 
                         // Setup audio capture
                         setupAudioCapture(projection)
@@ -144,13 +149,13 @@ class AudioPipeline(private val context: Context) {
         val audioFormat =
                 AudioFormat.Builder()
                         .setEncoding(AUDIO_FORMAT)
-                        .setSampleRate(SAMPLE_RATE)
+                        .setSampleRate(rate)
                         .setChannelMask(CHANNEL_CONFIG)
                         .build()
 
         // Calculate buffer size
-        val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
-        val bufferSize = maxOf(minBufferSize, MIN_BUFFER_BYTES)
+        val minBufferSize = AudioRecord.getMinBufferSize(rate, CHANNEL_CONFIG, AUDIO_FORMAT)
+        val bufferSize = maxOf(minBufferSize, minBufferBytes)
 
         // Create AudioRecord with playback capture
         audioRecord =
@@ -165,7 +170,7 @@ class AudioPipeline(private val context: Context) {
         }
 
         audioRecord?.startRecording()
-        Log.i(TAG, "AudioRecord started: $SAMPLE_RATE Hz, buffer=$bufferSize bytes")
+        Log.i(TAG, "AudioRecord started: $rate Hz, buffer=$bufferSize bytes")
     }
 
     private fun setupAudioOutput() {
@@ -187,7 +192,7 @@ class AudioPipeline(private val context: Context) {
 
         val minBufferSize =
                 AudioTrack.getMinBufferSize(OUT_RATE, AudioFormat.CHANNEL_OUT_MONO, AUDIO_FORMAT)
-        val bufferSize = maxOf(minBufferSize, MIN_BUFFER_BYTES * UP)
+        val bufferSize = maxOf(minBufferSize, minBufferBytes * up)
 
         audioTrack =
                 AudioTrack.Builder()
@@ -205,10 +210,10 @@ class AudioPipeline(private val context: Context) {
         // there first: that's the cushion against slow frames, and all of it is delay. Start at two
         // frames of silence; the loop adds a frame each time the speaker actually runs dry. Set
         // after applyOutput: a picked output rebuilds the track at its full capacity (160 ms).
-        audioTrack?.bufferSizeInFrames = 2 * FRAME_SIZE * UP
+        audioTrack?.bufferSizeInFrames = 2 * frame * up
         // Filled with silence before it plays rather than starting empty (on the Galaxy S9+ the
         // delay then measured about 30 ms lower at the same buffer size)
-        audioTrack?.let { writeSilence(it, it.bufferSizeInFrames / UP) }
+        audioTrack?.let { writeSilence(it, it.bufferSizeInFrames / up) }
         audioTrack?.play()
         audioTrack?.let { logFastPath(it, "started at $OUT_RATE Hz") }
     }
@@ -226,7 +231,9 @@ class AudioPipeline(private val context: Context) {
 
     private suspend fun processAudioLoop() {
         // Capture already runs at the model's rate, so one read is one model frame
-        val readSize = FRAME_SIZE
+        val readSize = frame
+        val healthLogFrames = rate * 5 / frame // every ~5 s
+        val warmupFrames = rate // the first second of output, while capture starts
         val inputBuffer = FloatArray(readSize)
         val skipBuffer = FloatArray(audioRecord?.bufferSizeInFrames ?: 0)
         val timestamp = AudioTimestamp()
@@ -236,14 +243,14 @@ class AudioPipeline(private val context: Context) {
         var warmupUnderruns = 0
         // Frames taken from capture (read, skipped or lost) and frames handed to the speaker
         var framesRead = 0L
-        var framesWritten = (audioTrack?.bufferSizeInFrames ?: 0) / UP.toLong() // the silence it starts with
+        var framesWritten = (audioTrack?.bufferSizeInFrames ?: 0) / up.toLong() // the silence it starts with
         // Audio the track may hold before writes wait; grows by a frame per underrun
-        var cushion = (audioTrack?.bufferSizeInFrames ?: 0) / UP
-        val upsampler = Upsampler()
-        val outputBuffer = FloatArray(FRAME_SIZE * UP)
+        var cushion = (audioTrack?.bufferSizeInFrames ?: 0) / up
+        val upsampler = if (up > 1) Upsampler() else null
+        val outputBuffer = FloatArray(frame * up)
         var lostFrames = 0L
         var skippedFrames = 0L
-        // Work per frame (model, STFT, volume), for the health log
+        // Work per frame (model, volume), for the health log
         var workNs = 0L
         var workMaxNs = 0L
         applySettings()
@@ -254,7 +261,7 @@ class AudioPipeline(private val context: Context) {
                     context.getSystemService(PerformanceHintManager::class.java)
                             ?.createHintSession(intArrayOf(Process.myTid()), HINT_TARGET_NS)
                 } else null
-        Log.i(TAG, "Audio thread pinned: ${gtcrnProcessor?.pinToFastCores()} fast cores, performance hint ${if (hint != null) "on" else "off"}")
+        Log.i(TAG, "Audio thread pinned: ${denoiser?.pinToFastCores()} fast cores, performance hint ${if (hint != null) "on" else "off"}")
 
         while (_isRunning.value && currentCoroutineContext().isActive) {
             try {
@@ -276,7 +283,7 @@ class AudioPipeline(private val context: Context) {
                 framesRead += readSize
                 val workStart = System.nanoTime()
 
-                val outputAudio = gtcrnProcessor?.processFrame(inputBuffer)
+                val outputAudio = denoiser?.processFrame(inputBuffer)
 
                 if (outputAudio != null && outputAudio.isNotEmpty()) {
                     // Apply output volume from UI slider
@@ -289,8 +296,8 @@ class AudioPipeline(private val context: Context) {
                     workNs += work
                     workMaxNs = maxOf(workMaxNs, work)
 
-                    upsampler.process(outputAudio, outputBuffer)
-                    audioTrack?.write(outputBuffer, 0, outputBuffer.size, AudioTrack.WRITE_BLOCKING)
+                    val out = upsampler?.let { it.process(outputAudio, outputBuffer); outputBuffer } ?: outputAudio
+                    audioTrack?.write(out, 0, out.size, AudioTrack.WRITE_BLOCKING)
                     framesWritten += outputAudio.size
                 }
 
@@ -298,39 +305,39 @@ class AudioPipeline(private val context: Context) {
                 statsUpdateCounter++
                 if (statsUpdateCounter >= 10) {
                     statsUpdateCounter = 0
-                    gtcrnProcessor?.getStats()?.let { AudioServiceState.updateStats(it) }
+                    denoiser?.getStats()?.let { AudioServiceState.updateStats(it) }
                     applySettings()
                     // Again, since Android moving the app between foreground and background can
                     // reset it (older kernels do when changing a thread's cpuset)
-                    gtcrnProcessor?.pinToFastCores()
+                    denoiser?.pinToFastCores()
 
                     val autoStopMinutes = PoiseSettings.autoStopMinutes.value
-                    val quietFrames = gtcrnProcessor?.framesSinceActive ?: 0
-                    if (autoStopMinutes > 0 && quietFrames >= autoStopMinutes * 60 * SAMPLE_RATE / FRAME_SIZE) {
+                    val quietFrames = denoiser?.framesSinceActive ?: 0
+                    if (autoStopMinutes > 0 && quietFrames >= autoStopMinutes * 60 * rate / frame) {
                         Log.i(TAG, "Nothing played for $autoStopMinutes min, stopping")
                         AudioServiceState.noteStop(if (autoStopMinutes == 60) "Silent for 1 hour" else "Silent for $autoStopMinutes min")
                         break
                     }
 
                     // Each underrun is a click: add a frame of silence to the cushion, so the next
-                    // slow stretch has 16 ms more to use up. Not while capture is still starting,
+                    // slow stretch has a frame more to use up. Not while capture is still starting,
                     // though: the track runs dry then on silence nobody hears, and growing it for
                     // that only adds delay
                     val track = audioTrack
                     if (track != null) {
                         // Android rebuilds the track at its full capacity when the output changes
                         // mid-session (a new pick, a reconnect); keep the cushion we chose
-                        if (track.bufferSizeInFrames > cushion * UP) track.bufferSizeInFrames = cushion * UP
-                        if (framesWritten < WARMUP_FRAMES) {
+                        if (track.bufferSizeInFrames > cushion * up) track.bufferSizeInFrames = cushion * up
+                        if (framesWritten < warmupFrames) {
                             underruns = track.underrunCount
                             warmupUnderruns = underruns
                         } else if (track.underrunCount > underruns) {
                             underruns = track.underrunCount
                             val before = track.bufferSizeInFrames
                             // Capped at the track's capacity; past that, more underruns change nothing
-                            if (track.setBufferSizeInFrames(before + FRAME_SIZE * UP) > before) {
-                                cushion = track.bufferSizeInFrames / UP
-                                framesWritten += writeSilence(track, FRAME_SIZE)
+                            if (track.setBufferSizeInFrames(before + frame * up) > before) {
+                                cushion = track.bufferSizeInFrames / up
+                                framesWritten += writeSilence(track, frame)
                                 Log.i(TAG, "Underrun, output cushion now ${ms(cushion.toLong())} ms")
                             }
                         }
@@ -349,9 +356,9 @@ class AudioPipeline(private val context: Context) {
                             lostFrames += overflow
                         }
                         val waiting = unread - maxOf(overflow, 0)
-                        val queued = track?.let { framesWritten - (it.playbackHeadPosition.toLong() and 0xffffffffL) / UP } ?: 0
+                        val queued = track?.let { framesWritten - (it.playbackHeadPosition.toLong() and 0xffffffffL) / up } ?: 0
                         val excess = minOf(waiting, waiting + queued - cushion)
-                        if (excess > 2 * FRAME_SIZE) {
+                        if (excess > 2 * frame) {
                             val skipped = record.read(skipBuffer, 0, excess.toInt(), AudioRecord.READ_NON_BLOCKING)
                             if (skipped > 0) {
                                 framesRead += skipped
@@ -361,9 +368,9 @@ class AudioPipeline(private val context: Context) {
                     }
                 }
 
-                if (++healthLogCounter >= HEALTH_LOG_FRAMES) {
+                if (++healthLogCounter >= healthLogFrames) {
                     healthLogCounter = 0
-                    val work = String.format(Locale.ROOT, "work=%.1f/%.1f ms", workNs / 1e6 / HEALTH_LOG_FRAMES, workMaxNs / 1e6)
+                    val work = String.format(Locale.ROOT, "work=%.1f/%.1f ms", workNs / 1e6 / healthLogFrames, workMaxNs / 1e6)
                     logHealth(framesRead, framesWritten, lostFrames, skippedFrames, warmupUnderruns, work)
                     workNs = 0L
                     workMaxNs = 0L
@@ -375,12 +382,12 @@ class AudioPipeline(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) hint?.close()
     }
 
-    /** Queues [frames] (ours, at 16 kHz) of silence without waiting; returns how many were queued. */
+    /** Queues [frames] (ours, at the model's rate) of silence without waiting; returns how many were queued. */
     private fun writeSilence(track: AudioTrack, frames: Int): Int =
-            maxOf(track.write(FloatArray(frames * UP), 0, frames * UP, AudioTrack.WRITE_NON_BLOCKING), 0) / UP
+            maxOf(track.write(FloatArray(frames * up), 0, frames * up, AudioTrack.WRITE_NON_BLOCKING), 0) / up
 
     private fun applySettings() {
-        val processor = gtcrnProcessor ?: return
+        val processor = denoiser ?: return
         processor.silenceThresholdDb = PoiseSettings.silenceDb.value.toFloat()
         processor.residualGain =
                 Math.pow(10.0, PoiseSettings.reductionDb(PoiseSettings.strength.value) / 20.0).toFloat()
@@ -406,7 +413,7 @@ class AudioPipeline(private val context: Context) {
         if (record.getTimestamp(timestamp, AudioTimestamp.TIMEBASE_MONOTONIC) != AudioRecord.SUCCESS) {
             return null
         }
-        return timestamp.framePosition + (System.nanoTime() - timestamp.nanoTime) * SAMPLE_RATE / 1_000_000_000
+        return timestamp.framePosition + (System.nanoTime() - timestamp.nanoTime) * rate / 1_000_000_000
     }
 
     /**
@@ -426,18 +433,18 @@ class AudioPipeline(private val context: Context) {
             Log.i(TAG, "Health: $drops")
             return
         }
-        val playedNow = played.framePosition / UP + (System.nanoTime() - played.nanoTime) * SAMPLE_RATE / 1_000_000_000
+        val playedNow = played.framePosition / up + (System.nanoTime() - played.nanoTime) * rate / 1_000_000_000
         val input = captured - framesRead // waiting to be read
         val output = framesWritten - playedNow // written, not yet played
-        // The STFT adds one hop between reading a sample and writing it
+        // Plus the model's own delay between reading a sample and writing it
         Log.i(
                 TAG,
-                "Health: $drops delay=${ms(input + FRAME_SIZE + output)} ms " +
-                        "(input ${ms(input)}, output ${ms(output)}) buffer=${ms(track.bufferSizeInFrames.toLong() / UP)} ms"
+                "Health: $drops delay=${ms(input + (denoiser?.delaySamples ?: 0) + output)} ms " +
+                        "(input ${ms(input)}, output ${ms(output)}) buffer=${ms(track.bufferSizeInFrames.toLong() / up)} ms"
         )
     }
 
-    private fun ms(frames: Long) = frames * 1000 / SAMPLE_RATE
+    private fun ms(frames: Long) = frames * 1000 / rate
 
     /** Stop audio capture and processing. The background job releases its resources as it ends. */
     fun stop() {
@@ -463,8 +470,8 @@ class AudioPipeline(private val context: Context) {
         audioTrack?.release()
         audioTrack = null
 
-        gtcrnProcessor?.close()
-        gtcrnProcessor = null
+        denoiser?.close()
+        denoiser = null
 
         Log.i(TAG, "Audio pipeline stopped")
     }

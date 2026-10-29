@@ -544,6 +544,16 @@ private fun RollDigits(text: String, style: TextStyle, up: Boolean) {
     }
 }
 
+private fun modelLabel(model: PoiseSettings.Model) = when (model) {
+    PoiseSettings.Model.GTCRN -> "GTCRN"
+    PoiseSettings.Model.DF3 -> "DeepFilter" // DeepFilterNet 3; the full name overflows the picker
+}
+
+private fun modelNote(model: PoiseSettings.Model) = when (model) {
+    PoiseSettings.Model.GTCRN -> "Light, runs on any phone"
+    PoiseSettings.Model.DF3 -> "Fuller sound, needs a fast phone"
+}
+
 private fun autoStopLabel(minutes: Int) = when {
     minutes == 0 -> "Never"
     minutes == 60 -> "1 hour"
@@ -949,6 +959,8 @@ private fun ColumnScope.SettingsPage(
 ) {
     val pal = LocalPalette.current
     val buzz = rememberBuzz()
+    val model by PoiseSettings.model.collectAsState()
+    val active by AudioServiceState.isActive.collectAsState()
     val strength by PoiseSettings.strength.collectAsState()
     val silenceDb by PoiseSettings.silenceDb.collectAsState()
     val autoStop by PoiseSettings.autoStopMinutes.collectAsState()
@@ -966,6 +978,26 @@ private fun ColumnScope.SettingsPage(
         Title("Settings")
 
         Caption("Isolation")
+        Column(Modifier.panel()) {
+            // The pipeline takes the model when it starts, so a change waits for the next session
+            var choosing by remember { mutableStateOf(false) }
+            val source = remember { MutableInteractionSource() }
+            Box {
+                val subtitle = if (active) "Applies from the next start" else modelNote(model)
+                SettingRow("Model", subtitle, Modifier.pressRipple(source).clickable(source, null) { buzz(Buzz.Tap); choosing = true }) {
+                    RowValue(modelLabel(model))
+                }
+                if (choosing) {
+                    val choices = PoiseSettings.Model.entries
+                    CardPicker(
+                            choices.map(::modelLabel),
+                            choices.indexOf(model),
+                            { PoiseSettings.setModel(choices[it]) },
+                            { choosing = false }
+                    )
+                }
+            }
+        }
         SliderCard(
                 "Reduction strength", "How much noise is removed",
                 PoiseSettings.reductionDb(strength).roundToInt(), "dB",
@@ -1073,7 +1105,8 @@ private fun ColumnScope.SettingsPage(
         }
 
         Column(Modifier.panel()) {
-            val atDefaults = strength == PoiseSettings.DEFAULT_STRENGTH && silenceDb == PoiseSettings.DEFAULT_SILENCE_DB &&
+            val atDefaults = model == PoiseSettings.DEFAULT_MODEL &&
+                    strength == PoiseSettings.DEFAULT_STRENGTH && silenceDb == PoiseSettings.DEFAULT_SILENCE_DB &&
                     autoStop == PoiseSettings.DEFAULT_AUTO_STOP_MINUTES && stopOnUnplug == PoiseSettings.DEFAULT_STOP_ON_UNPLUG &&
                     theme == PoiseSettings.DEFAULT_THEME && haptics == PoiseSettings.DEFAULT_HAPTICS &&
                     reduceMotion == PoiseSettings.DEFAULT_REDUCE_MOTION

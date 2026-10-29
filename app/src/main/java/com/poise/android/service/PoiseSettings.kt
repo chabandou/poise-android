@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 object PoiseSettings {
     val AUTO_STOP_MINUTES = listOf(0, 5, 10, 30, 60) // 0 = never
 
+    /** The denoising model. DF3 sounds fuller but needs about twice GTCRN's CPU, on a fast core. */
+    enum class Model { GTCRN, DF3 }
+
     const val DEFAULT_STRENGTH = 1f
     const val DEFAULT_SILENCE_DB = -40
     const val DEFAULT_AUTO_STOP_MINUTES = 10
@@ -17,12 +20,16 @@ object PoiseSettings {
     const val DEFAULT_THEME = 0
     const val DEFAULT_HAPTICS = true
     const val DEFAULT_REDUCE_MOTION = false
+    val DEFAULT_MODEL = Model.GTCRN
 
     private var prefs: SharedPreferences? = null
 
     // 0 = gentle, 1 = strong
     private val _strength = MutableStateFlow(DEFAULT_STRENGTH)
     val strength: StateFlow<Float> = _strength.asStateFlow()
+
+    private val _model = MutableStateFlow(DEFAULT_MODEL)
+    val model: StateFlow<Model> = _model.asStateFlow()
 
     private val _silenceDb = MutableStateFlow(DEFAULT_SILENCE_DB)
     val silenceDb: StateFlow<Int> = _silenceDb.asStateFlow()
@@ -52,6 +59,7 @@ object PoiseSettings {
         if (prefs != null) return
         val p = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
         _strength.value = p.getFloat("strength", _strength.value)
+        _model.value = Model.entries.firstOrNull { it.name == p.getString("model", null) } ?: _model.value
         _silenceDb.value = p.getInt("silence_db", _silenceDb.value)
         _autoStopMinutes.value = p.getInt("auto_stop_min", _autoStopMinutes.value)
         _stopOnUnplug.value = p.getBoolean("stop_on_unplug", _stopOnUnplug.value)
@@ -69,6 +77,12 @@ object PoiseSettings {
     fun setStrength(v: Float) {
         _strength.value = v.coerceIn(0f, 1f)
         prefs?.edit()?.putFloat("strength", _strength.value)?.apply()
+    }
+
+    /** Takes effect from the next start. */
+    fun setModel(v: Model) {
+        _model.value = v
+        prefs?.edit()?.putString("model", v.name)?.apply()
     }
 
     fun setSilenceDb(v: Int) {
@@ -114,6 +128,7 @@ object PoiseSettings {
     /** Puts every setting on the Settings page back to its default. The volume stays as it is. */
     fun resetToDefaults() {
         setStrength(DEFAULT_STRENGTH)
+        setModel(DEFAULT_MODEL)
         setSilenceDb(DEFAULT_SILENCE_DB)
         setAutoStopMinutes(DEFAULT_AUTO_STOP_MINUTES)
         setStopOnUnplug(DEFAULT_STOP_ON_UNPLUG)

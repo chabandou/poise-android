@@ -9,7 +9,7 @@ import android.util.Log
  * 512-sample frames in and out; the STFT, its overlap and the recurrent state all live in the
  * native model. Output sample n is input sample n - [MODEL_DELAY].
  */
-class DF3Processor(context: Context) : AutoCloseable {
+class DF3Processor(context: Context) : Denoiser {
 
     companion object {
         private const val TAG = "DF3Processor"
@@ -25,6 +25,10 @@ class DF3Processor(context: Context) : AutoCloseable {
         }
     }
 
+    override val sampleRate = SAMPLE_RATE
+    override val frameSize = FRAME_SIZE
+    override val delaySamples = MODEL_DELAY
+
     private var handle: Long
     private val output = FloatArray(FRAME_SIZE)
 
@@ -33,16 +37,14 @@ class DF3Processor(context: Context) : AutoCloseable {
     private var dryPos = 0
 
     private var vadThresholdLinear = 0.01f
-    /** Frames quieter than this count as silence (for auto-stop); the model runs on every frame, as its state needs. */
-    var silenceThresholdDb = -40f
+    // Only counts quiet frames (for auto-stop): the model runs on every frame, as its state needs
+    override var silenceThresholdDb = -40f
         set(value) {
             field = value
             vadThresholdLinear = Math.pow(10.0, value / 20.0).toFloat()
         }
-    /** Share of the input mixed back under the model's output (0 = none). */
-    var residualGain = 0f
-    /** Quiet frames in a row, since the last frame above [silenceThresholdDb]. */
-    var framesSinceActive = 0
+    override var residualGain = 0f
+    override var framesSinceActive = 0
         private set
     private val hangFrames = 300 * SAMPLE_RATE / 1000 / FRAME_SIZE
 
@@ -55,8 +57,7 @@ class DF3Processor(context: Context) : AutoCloseable {
         Log.i(TAG, "DF3 loaded (${weights.size / 1024} KB)")
     }
 
-    /** Processes one frame of [FRAME_SIZE] samples; the returned array is reused by the next call. */
-    fun processFrame(inputFrame: FloatArray): FloatArray {
+    override fun processFrame(inputFrame: FloatArray): FloatArray {
         checkVAD(inputFrame)
         val start = System.nanoTime()
         nativeRun(handle, inputFrame, output)
@@ -78,7 +79,7 @@ class DF3Processor(context: Context) : AutoCloseable {
         if (kotlin.math.sqrt(sumSquares / audio.size) > vadThresholdLinear) framesSinceActive = 0 else framesSinceActive++
     }
 
-    fun getStats(): ProcessingStats {
+    override fun getStats(): ProcessingStats {
         val frameMs = FRAME_SIZE * 1000.0 / SAMPLE_RATE
         return ProcessingStats(
                 avgTimeMs = smoothedInferenceTimeMs,
@@ -101,8 +102,7 @@ class DF3Processor(context: Context) : AutoCloseable {
         }
     }
 
-    /** Keeps the calling thread off the slowest cores; how many it may use, 0 if none are slower, or -errno. */
-    external fun pinToFastCores(): Int
+    external override fun pinToFastCores(): Int
 
     private external fun nativeInit(weights: ByteArray): Long
     private external fun nativeRun(handle: Long, input: FloatArray, output: FloatArray)
